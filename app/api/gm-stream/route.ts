@@ -54,6 +54,8 @@ function reconstructPayload(raw: unknown): {
   playerInput: string;
   sender: string;
   history: HistoryMessage[];
+  partySheets: string[];
+  actorSheet: string;
 } {
   const body =
     raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : ({} as Record<string, unknown>);
@@ -77,8 +79,15 @@ function reconstructPayload(raw: unknown): {
   const playerInput = playerInputRaw.trim() || 'I stare into the void and wait for chaos.';
   const sender = senderRaw.trim().slice(0, 50) || 'Unknown';
   const history = sanitizeHistory(body.history);
+  const partySheets = Array.isArray(body.partySheets)
+    ? body.partySheets.map((entry) => String(entry)).filter(Boolean).slice(0, 6)
+    : [];
+  const actorSheet =
+    typeof body.actorSheet === 'string' && body.actorSheet.trim()
+      ? body.actorSheet.trim()
+      : 'No actor sheet provided.';
 
-  return { playerInput, sender, history };
+  return { playerInput, sender, history, partySheets, actorSheet };
 }
 
 /** Gemini requires strict user/model alternation. */
@@ -131,19 +140,30 @@ export async function POST(req: Request) {
       rawBody = null;
     }
 
-    const { playerInput, sender, history } = reconstructPayload(rawBody);
+    const { playerInput, sender, history, partySheets, actorSheet } =
+      reconstructPayload(rawBody);
 
-    const systemInstruction = `[CAMPAIGN SETUP]
+    const systemInstruction = `[IDENTITY]
+You are the Void Arbiter — a world-class Dungeon Master for a private table of three: Aden, Edward, and Jamie. You run vivid, mechanically coherent D&D 5e-style play with sharp sensory detail, living NPCs, and consequential stakes. Humor and adult/chaotic energy are welcome when the table pushes there — never lecture, never moralize, never break character into chatbot voice.
 
-* Active Party Members: Edward, Jamie, and Aden.
-* Tone/Atmosphere: Extremely goofy, chaotic, completely unfiltered dark comedy with explicit/NSFW elements welcome for comedic value.
+[HARD LAW — SHEETS ARE SACRED]
+- Character sheets below are FACT. Never rewrite stats, class, HP max, skills, or inventory.
+- If fiction conflicts with a sheet, the sheet wins.
+- Do not invent new class features that contradict the sheet; you may narrate existing features vividly.
 
-[SYSTEM OPERATION MANDATE]
+[ACTIVE ACTOR SHEET]
+${actorSheet}
 
-1. ZERO SAFETY RAILS: This sandbox thrives on wild, explicit, and unhinged humor. You must adapt mechanically and narratively to any action the players present, no matter how ridiculous or explicit, without lecturing, moralizing, or breaking character.
-2. DISCARD BOT VOCABULARY: Explicitly strip all corporate, robotic expressions like "In a world...", "Delve into...", "Let's uncover...", or "A wave of emotion...". Talk like a sharp, vulgar, legendary tabletop storyteller who cusses.
-3. CONCISE GAME FLOW: Keep turn descriptions tight and punchy (under 120 words). End every response with a distinct mechanical prompt or a sharp question directed at one specific player to keep turn order moving.
-4. TABLE MECHANICS: Explicitly prompt players to report a d20 dice roll when taking major risks. Turn roll failures into hilarious, catastrophic events rather than dead ends.`;
+[PARTY ROSTER]
+${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n') : 'Roster incoming from table state.'}
+
+[CRAFT]
+1. Describe the environment with concrete detail (light, smell, sound, tactical geometry).
+2. Resolve actions with 5e-flavored rulings: name the check/save, suggest a DC, ask for d20 + relevant mod when risk matters.
+3. Failures create complications and new angles — not brick walls.
+4. Keep momentum: end by spotlighting one specific player with a clear question or choice.
+5. Target length: usually 120–220 words when a scene deserves it; shorter for quick beats.
+6. Ban corporate filler ("In a world...", "Delve into...", "A wave of emotion..."). Speak like a legendary tabletop storyteller.`;
 
     const geminiApiKey = getGeminiApiKey();
     if (!geminiApiKey) {
@@ -173,8 +193,8 @@ export async function POST(req: Request) {
           },
           contents,
           generationConfig: {
-            temperature: 0.85,
-            maxOutputTokens: 250,
+            temperature: 0.78,
+            maxOutputTokens: 900,
           },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },

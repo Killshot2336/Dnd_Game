@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import CharacterSetup from '@/components/CharacterSetup';
+import CharacterSetup, { type ForgeJoinPayload } from '@/components/CharacterSetup';
 import TokenPiece from '@/components/tabletop/TokenPiece';
 import {
   BOARD_TEXTURE,
@@ -12,6 +12,7 @@ import {
   MAP_SCENE,
   portraitForPlayer,
 } from '@/lib/game-art';
+import { compactSheetForGm, sheetSnapshot, type CharacterSheet } from '@/lib/character-sheet';
 import {
   createOptimisticMessage,
   isUniqueViolation,
@@ -22,7 +23,6 @@ import {
   normalizePlayer,
   safeHp,
   safeStat,
-  sanitizeCharacterPayload,
 } from '@/lib/game-guards';
 import {
   readCachedPlayerSeat,
@@ -37,7 +37,6 @@ import {
 } from '@/lib/supabase';
 import type {
   AbilityScores,
-  CharacterPayload,
   GameRecord,
   PlayerEntity,
   ThreadMessage,
@@ -71,6 +70,8 @@ export default function GameRoom({ params }: { params: { code: string } }) {
   const [joining, setJoining] = useState(false);
   const [channelHealth, setChannelHealth] = useState<ChannelHealth>('connecting');
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [activeSheet, setActiveSheet] = useState<CharacterSheet | null>(null);
+  const [sheetTab, setSheetTab] = useState<'stats' | 'soul' | 'gear'>('stats');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
@@ -593,32 +594,55 @@ export default function GameRoom({ params }: { params: { code: string } }) {
     []
   );
 
-  const handleCharacterDone = async (charData: CharacterPayload) => {
+  const handleCharacterDone = async (payload: ForgeJoinPayload) => {
     if (!game?.id || joining) return;
     setJoining(true);
     setBootError(null);
 
-    const sanitized = sanitizeCharacterPayload(charData);
-    const cached = readCachedPlayerSeat(sessionCode);
+    const { sheet, characterId } = payload;
+    setActiveSheet(sheet);
 
     try {
-      const existing = await resolveExistingSeat(game.id, sanitized.name, cached);
-      if (existing) {
-        adoptPlayerSeat(existing, sessionCode);
+      const supabase = getSupabaseBrowserClient();
+
+      // Block duplicate character seed at the same table
+      const { data: seatedSame } = await supabase
+        .from('players')
+        .select('*')
+        .eq('game_id', game.id)
+        .eq('character_id', characterId)
+        .maybeSingle();
+
+      if (seatedSame) {
+        const existing = normalizePlayer(seatedSame as Record<string, unknown>);
+        if (existing) {
+          adoptPlayerSeat(existing, sessionCode);
+          setSyncNotice('This legend is already seated at this table — reclaiming your seat.');
+          return;
+        }
+      }
+
+      const cached = readCachedPlayerSeat(sessionCode);
+      const existingByName = await resolveExistingSeat(game.id, sheet.name, cached);
+      if (existingByName) {
+        adoptPlayerSeat(existingByName, sessionCode);
         return;
       }
 
-      const supabase = getSupabaseBrowserClient();
+      const snapshot = sheetSnapshot(sheet);
       const { data, error } = await supabase
         .from('players')
         .insert([
           {
             game_id: game.id,
-            user_name: sanitized.name,
-            avatar_class: sanitized.characterClass,
-            stats: sanitized.stats,
-            current_hp: 15,
-            max_hp: 15,
+            user_name: sheet.name,
+            avatar_class: sheet.className,
+            stats: sheet.stats,
+            current_hp: sheet.maxHp,
+            max_hp: sheet.maxHp,
+            character_id: characterId,
+            seed: sheet.seed,
+            sheet_snapshot: snapshot,
           },
         ])
         .select()
@@ -626,11 +650,13 @@ export default function GameRoom({ params }: { params: { code: string } }) {
 
       if (error) {
         if (isUniqueViolation(error)) {
-          const raced = await resolveExistingSeat(game.id, sanitized.name, cached);
+          const raced = await resolveExistingSeat(game.id, sheet.name, cached);
           if (raced) {
             adoptPlayerSeat(raced, sessionCode);
             return;
           }
+          setBootError('That character or name is already at this table.');
+          return;
         }
         throw error;
       }
@@ -643,22 +669,21 @@ export default function GameRoom({ params }: { params: { code: string } }) {
       adoptPlayerSeat(created, sessionCode);
     } catch (error) {
       console.error('Character manifestation error:', error);
-
-      // Keep the board usable with a local fallback seat if the write path collapses.
       const fallbackSeat: PlayerEntity = {
         id: `local-${Date.now()}`,
         game_id: game.id,
-        user_name: sanitized.name,
-        avatar_class: sanitized.characterClass,
-        stats: sanitized.stats,
-        current_hp: 15,
-        max_hp: 15,
+        user_name: sheet.name,
+        avatar_class: sheet.className,
+        stats: sheet.stats,
+        current_hp: sheet.maxHp,
+        max_hp: sheet.maxHp,
         created_at: new Date().toISOString(),
+        character_id: characterId,
+        seed: sheet.seed,
+        sheet_snapshot: sheetSnapshot(sheet),
       };
       adoptPlayerSeat(fallbackSeat, sessionCode);
-      setSyncNotice(
-        'Seat write failed — running on local fallback until sync recovers.'
-      );
+      setSyncNotice('Seat write failed — local sheet active until sync recovers.');
     } finally {
       setJoining(false);
     }
@@ -706,7 +731,21 @@ export default function GameRoom({ params }: { params: { code: string } }) {
           content: message?.content ?? '',
         }))
         .filter((message) => message.content.length > 0)
-        .slice(-10);
+        .slice(-14);
+
+      const partySheets = players.map((player) => {
+        const snap = player.sheet_snapshot;
+        if (snap?.name) {
+          return [
+            `${snap.name} | ${snap.race ?? ''} ${snap.className ?? player.avatar_class}`,
+            `HP ${player.current_hp}/${player.max_hp} · AC ${snap.armorClass ?? '?'}`,
+            `Stats ${JSON.stringify(snap.stats ?? player.stats)}`,
+            `Skills: ${(snap.skills ?? []).join(', ') || '—'}`,
+            `Backstory: ${(snap.backstory ?? '').slice(0, 220)}`,
+          ].join('\n');
+        }
+        return `${player.user_name} (${player.avatar_class}) HP ${player.current_hp}/${player.max_hp}`;
+      });
 
       let gmReply = 'The simulation warped. Repeat your raw action.';
       try {
@@ -718,6 +757,8 @@ export default function GameRoom({ params }: { params: { code: string } }) {
             sender: senderName,
             gameId: activeGameId,
             history: activeHistory,
+            partySheets,
+            actorSheet: compactSheetForGm(activeSheet),
           }),
         });
 
@@ -1034,7 +1075,7 @@ export default function GameRoom({ params }: { params: { code: string } }) {
           isTrayOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        <div className="h-full overflow-y-auto custom-scrollbar p-5 space-y-5">
+        <div className="h-full overflow-y-auto custom-scrollbar p-5 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="relative w-16 h-16 rounded-full overflow-hidden token-ring shrink-0">
@@ -1042,13 +1083,16 @@ export default function GameRoom({ params }: { params: { code: string } }) {
               </div>
               <div>
                 <h2 className="font-display text-xl font-black text-[#2c1810]">
-                  {currentPlayer?.user_name ?? 'Wanderer'}
+                  {activeSheet?.name ?? currentPlayer?.user_name ?? 'Wanderer'}
                 </h2>
-                <p className="text-[11px] uppercase tracking-[0.25em] text-[#5c3a21]">
-                  {currentPlayer?.avatar_class ?? 'Adventurer'}
+                <p className="text-[11px] uppercase tracking-[0.2em] text-[#5c3a21]">
+                  {activeSheet
+                    ? `${activeSheet.race} ${activeSheet.className}`
+                    : currentPlayer?.avatar_class ?? 'Adventurer'}
                 </p>
                 <p className="text-[12px] text-[#7f1d1d] mt-1">
-                  Vitality {activeHp.current}/{activeHp.max}
+                  HP {activeHp.current}/{activeHp.max}
+                  {activeSheet ? ` · AC ${activeSheet.armorClass}` : ''}
                 </p>
               </div>
             </div>
@@ -1061,45 +1105,129 @@ export default function GameRoom({ params }: { params: { code: string } }) {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center border border-[#8b5e34] p-3 bg-[#dfc4a0]/40">
-            {(
-              ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as Array<keyof AbilityScores>
-            ).map((stat) => (
-              <div key={stat}>
-                <div className="font-display text-[10px] tracking-widest text-[#5c3a21]">
-                  {stat}
-                </div>
-                <div className="font-display text-lg font-black text-[#2c1810]">
-                  {safeStat(currentPlayer, stat)}
-                </div>
-              </div>
+          {(activeSheet?.seed || currentPlayer?.seed) && (
+            <div className="border border-[#8b5e34] px-3 py-2 bg-[#dfc4a0]/40">
+              <p className="font-display text-[10px] uppercase tracking-[0.25em] text-[#5c3a21]">
+                Character Seed
+              </p>
+              <p className="font-mono text-sm tracking-[0.2em] text-[#2c1810]">
+                {activeSheet?.seed ?? currentPlayer?.seed}
+              </p>
+              <p className="text-[11px] italic text-[#5c3a21] mt-1">
+                Share this seed to load the same legend at another table.
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            {(['stats', 'soul', 'gear'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setSheetTab(tab)}
+                className={`flex-1 font-display text-[10px] uppercase tracking-[0.2em] py-2 border ${
+                  sheetTab === tab
+                    ? 'border-[#9f1239] bg-[#9f1239]/10 text-[#7f1d1d]'
+                    : 'border-[#8b5e34] text-[#5c3a21]'
+                }`}
+              >
+                {tab}
+              </button>
             ))}
           </div>
 
-          <div>
-            <p className="font-display text-xs uppercase tracking-[0.25em] text-[#5c3a21] mb-3">
-              Reliquary
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {INVENTORY_SLOTS.map((slot) => (
-                <div
-                  key={slot.id}
-                  className="inventory-socket aspect-square border-2 border-[#8b5e34] bg-[#2c1810]/10 flex items-center justify-center p-3"
-                  title={slot.label}
-                  aria-label={slot.label}
-                >
-                  <Image
-                    src={slot.src}
-                    alt=""
-                    width={72}
-                    height={72}
-                    unoptimized
-                    className="inventory-glyph w-full h-full object-contain opacity-35 transition-all duration-300"
-                  />
+          {sheetTab === 'stats' && (
+            <>
+              <div className="grid grid-cols-3 gap-2 text-center border border-[#8b5e34] p-3 bg-[#dfc4a0]/40">
+                {(
+                  ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as Array<keyof AbilityScores>
+                ).map((stat) => (
+                  <div key={stat}>
+                    <div className="font-display text-[10px] tracking-widest text-[#5c3a21]">
+                      {stat}
+                    </div>
+                    <div className="font-display text-lg font-black text-[#2c1810]">
+                      {activeSheet?.stats?.[stat] ?? safeStat(currentPlayer, stat)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {activeSheet && (
+                <div className="text-[12px] text-[#2c1810] space-y-1">
+                  <p>
+                    <span className="font-display uppercase tracking-wider text-[#5c3a21]">
+                      Skills:{' '}
+                    </span>
+                    {activeSheet.skills.join(', ')}
+                  </p>
+                  <p>
+                    <span className="font-display uppercase tracking-wider text-[#5c3a21]">
+                      Features:{' '}
+                    </span>
+                    {activeSheet.features.join(', ')}
+                  </p>
                 </div>
-              ))}
+              )}
+            </>
+          )}
+
+          {sheetTab === 'soul' && (
+            <div className="space-y-3 text-[13px] text-[#2c1810] leading-relaxed">
+              <p>
+                <span className="font-display uppercase tracking-wider text-[#5c3a21] block text-[10px]">
+                  Appearance
+                </span>
+                {activeSheet?.appearance || currentPlayer?.sheet_snapshot?.appearance || '—'}
+              </p>
+              <p>
+                <span className="font-display uppercase tracking-wider text-[#5c3a21] block text-[10px]">
+                  Backstory
+                </span>
+                {activeSheet?.backstory || currentPlayer?.sheet_snapshot?.backstory || '—'}
+              </p>
+              <p>
+                <span className="font-display uppercase tracking-wider text-[#5c3a21] block text-[10px]">
+                  Ideal / Bond / Flaw
+                </span>
+                {activeSheet?.ideals || '—'} / {activeSheet?.bonds || '—'} /{' '}
+                {activeSheet?.flaws || '—'}
+              </p>
             </div>
-          </div>
+          )}
+
+          {sheetTab === 'gear' && (
+            <div className="space-y-3">
+              {activeSheet?.equipment?.length ? (
+                <ul className="text-[13px] text-[#2c1810] list-disc pl-5 space-y-1">
+                  {activeSheet.equipment.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="font-display text-xs uppercase tracking-[0.25em] text-[#5c3a21]">
+                Reliquary Skins
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                {INVENTORY_SLOTS.map((slot) => (
+                  <div
+                    key={slot.id}
+                    className="inventory-socket aspect-square border-2 border-[#8b5e34] bg-[#2c1810]/10 flex items-center justify-center p-3"
+                    title={slot.label}
+                    aria-label={slot.label}
+                  >
+                    <Image
+                      src={slot.src}
+                      alt=""
+                      width={72}
+                      height={72}
+                      unoptimized
+                      className="inventory-glyph w-full h-full object-contain opacity-35 transition-all duration-300"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 

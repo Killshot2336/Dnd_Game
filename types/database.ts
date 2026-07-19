@@ -15,6 +15,30 @@ export interface GameRecord {
   created_at: string;
 }
 
+export interface SheetSnapshot {
+  seed?: string;
+  name?: string;
+  templateId?: string;
+  race?: string;
+  className?: string;
+  subclass?: string;
+  background?: string;
+  level?: number;
+  stats?: AbilityScores;
+  skills?: string[];
+  features?: string[];
+  equipment?: string[];
+  backstory?: string;
+  appearance?: string;
+  ideals?: string;
+  bonds?: string;
+  flaws?: string;
+  skin?: { portraitKey?: string; tint?: string };
+  maxHp?: number;
+  armorClass?: number;
+  speed?: number;
+}
+
 export interface PlayerEntity {
   id: string;
   game_id: string;
@@ -24,6 +48,9 @@ export interface PlayerEntity {
   max_hp: number;
   stats: AbilityScores;
   created_at: string;
+  character_id?: string | null;
+  seed?: string | null;
+  sheet_snapshot?: SheetSnapshot;
 }
 
 export interface ThreadMessage {
@@ -34,6 +61,7 @@ export interface ThreadMessage {
   created_at: string;
 }
 
+/** Legacy payload kept for compatibility with older join paths. */
 export interface CharacterPayload {
   name: string;
   characterClass: string;
@@ -50,6 +78,8 @@ export interface GmStreamRequest {
   sender: string;
   gameId: string;
   history: HistoryMessage[];
+  partySheets?: string[];
+  actorSheet?: string;
 }
 
 export interface GmStreamResponse {

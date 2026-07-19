@@ -36,6 +36,11 @@ export function normalizePlayer(row: Record<string, unknown> | null | undefined)
   if (!row || typeof row !== 'object') return null;
   if (row.id == null || row.game_id == null || row.user_name == null) return null;
 
+  const snapshot =
+    row.sheet_snapshot && typeof row.sheet_snapshot === 'object'
+      ? (row.sheet_snapshot as PlayerEntity['sheet_snapshot'])
+      : {};
+
   return {
     id: String(row.id),
     game_id: String(row.game_id),
@@ -45,6 +50,9 @@ export function normalizePlayer(row: Record<string, unknown> | null | undefined)
     max_hp: typeof row.max_hp === 'number' && row.max_hp > 0 ? row.max_hp : 15,
     stats: parseStats(row.stats),
     created_at: String(row.created_at ?? new Date().toISOString()),
+    character_id: row.character_id ? String(row.character_id) : null,
+    seed: row.seed ? String(row.seed) : null,
+    sheet_snapshot: snapshot,
   };
 }
 
