@@ -117,3 +117,34 @@ body {
 .inventory-glyph {
   filter: invert(0.85) sepia(0.2) saturate(0.4);
 }
+
+@keyframes customFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes gmBreathe {
+  0%,
+  100% {
+    transform: translateY(-8px) scale(1);
+  }
+  50% {
+    transform: translateY(-8px) scale(1.035);
+  }
+}
+
+.animate-float {
+  animation: customFloat 5s ease-in-out infinite;
+  will-change: transform;
+}
+
+.gm-breathe {
+  animation: gmBreathe 1.6s ease-in-out infinite;
+  will-change: transform;
+  box-shadow: 0 0 60px rgba(168, 85, 247, 0.45);
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import CharacterSetup from '@/components/CharacterSetup';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
@@ -15,9 +15,11 @@ import type {
 const ICON_BASE = 'https://raw.githubusercontent.com/game-icons/icons/master';
 
 const assetLibrary = {
-  background:
+  boardArt:
     'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2400&q=80',
-  avatar:
+  gmAvatar:
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=80',
+  playerAvatar:
     'https://images.unsplash.com/photo-1460194436988-671f763436b7?auto=format&fit=crop&w=800&q=80',
   mainWeapon: `${ICON_BASE}/lorc/broadsword.svg`,
   shield: `${ICON_BASE}/lorc/checked-shield.svg`,
@@ -35,6 +37,19 @@ const inventorySlots = [
   { id: 'ring', label: 'Enchanted Ring', src: assetLibrary.ring },
   { id: 'amulet', label: 'Enchanted Jewel', src: assetLibrary.amulet },
 ] as const;
+
+interface DiceParticle {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rotation: number;
+  vRot: number;
+  size: number;
+  alpha: number;
+  value: number;
+}
 
 function parseStats(raw: unknown): AbilityScores {
   const fallback: AbilityScores = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
@@ -73,6 +88,66 @@ function normalizeMessage(row: Record<string, unknown>): ThreadMessage {
   };
 }
 
+function PlayerBoardCard({
+  player,
+  emphasized,
+  onMount,
+}: {
+  player: PlayerEntity;
+  emphasized?: boolean;
+  onMount: (name: string, el: HTMLDivElement | null) => void;
+}) {
+  const ratio = Math.max(0, Math.min(1, player.current_hp / player.max_hp));
+
+  return (
+    <div
+      ref={(el) => onMount(player.user_name, el)}
+      className={`relative overflow-hidden rounded-2xl border backdrop-blur-md shadow-2xl transition-all duration-300 ${
+        emphasized
+          ? 'border-purple-400/60 bg-purple-950/40 shadow-[0_0_40px_rgba(168,85,247,0.35)] scale-105'
+          : 'border-white/10 bg-black/60 hover:border-purple-500/40'
+      }`}
+    >
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(168,85,247,0.12),transparent_45%)] pointer-events-none" />
+      <div className="relative p-3 sm:p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-white/15 shrink-0">
+            <Image
+              src={assetLibrary.playerAvatar}
+              alt=""
+              fill
+              sizes="48px"
+              className="object-cover"
+            />
+          </div>
+          <div className="min-w-0">
+            <h4 className="font-black text-xs sm:text-sm text-neutral-100 truncate tracking-wide">
+              {player.user_name}
+            </h4>
+            <p className="text-[9px] font-mono uppercase tracking-widest text-purple-300 truncate">
+              {player.avatar_class}
+            </p>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[10px] font-mono uppercase tracking-wider text-neutral-400">
+            <span>
+              {player.current_hp}/{player.max_hp} HP
+            </span>
+            <span>CHA {player.stats.CHA}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-black/70 overflow-hidden border border-white/5">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-red-600 via-pink-500 to-purple-500"
+              style={{ width: `${ratio * 100}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GameRoom({ params }: { params: { code: string } }) {
   const sessionCode = params.code.toUpperCase();
   const [game, setGame] = useState<GameRecord | null>(null);
@@ -84,7 +159,42 @@ export default function GameRoom({ params }: { params: { code: string } }) {
   const [isTrayOpen, setIsTrayOpen] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
+  const diceParticlesRef = useRef<DiceParticle[]>([]);
+  const playerPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
+  const currentPlayerNameRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentPlayerNameRef.current = currentPlayer?.user_name ?? null;
+  }, [currentPlayer]);
+
+  const triggerDiceFromUser = useCallback((senderName: string) => {
+    if (typeof window === 'undefined') return;
+    if (senderName === 'GM') return;
+
+    const origin = playerPositionsRef.current[senderName] || {
+      x: window.innerWidth / 2,
+      y: window.innerHeight - 220,
+    };
+    const burstCount = 5;
+
+    for (let i = 0; i < burstCount; i++) {
+      diceParticlesRef.current.push({
+        id: Math.random(),
+        x: origin.x + (Math.random() - 0.5) * 18,
+        y: origin.y + (Math.random() - 0.5) * 12,
+        vx: (Math.random() - 0.5) * 14,
+        vy: -Math.random() * 12 - 5,
+        rotation: Math.random() * Math.PI,
+        vRot: (Math.random() - 0.5) * 0.25,
+        size: Math.random() * 8 + 16,
+        alpha: 1,
+        value: Math.floor(Math.random() * 20) + 1,
+      });
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +329,13 @@ export default function GameRoom({ params }: { params: { code: string } }) {
             if (prev.some((message) => message.id === incoming.id)) return prev;
             return [...prev, incoming];
           });
+
+          if (
+            incoming.sender !== 'GM' &&
+            incoming.sender !== currentPlayerNameRef.current
+          ) {
+            triggerDiceFromUser(incoming.sender);
+          }
         }
       )
       .subscribe();
@@ -226,11 +343,118 @@ export default function GameRoom({ params }: { params: { code: string } }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [game]);
+  }, [game, triggerDiceFromUser]);
 
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isGMLoading]);
+
+  // Infinite Graphics Simulation Engine Loop for Dynamic Dice Rendering
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId = 0;
+
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    const drawD20 = (
+      c: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+      size: number,
+      rot: number,
+      value: number
+    ) => {
+      c.save();
+      c.translate(x, y);
+      c.rotate(rot);
+
+      c.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * Math.PI) / 3 - Math.PI / 6;
+        const px = Math.cos(angle) * size;
+        const py = Math.sin(angle) * size;
+        if (i === 0) c.moveTo(px, py);
+        else c.lineTo(px, py);
+      }
+      c.closePath();
+
+      const gradient = c.createLinearGradient(-size, -size, size, size);
+      gradient.addColorStop(0, 'rgba(88, 28, 135, 0.95)');
+      gradient.addColorStop(0.5, 'rgba(15, 11, 28, 0.95)');
+      gradient.addColorStop(1, 'rgba(236, 72, 153, 0.55)');
+      c.fillStyle = gradient;
+      c.fill();
+      c.strokeStyle = '#c084fc';
+      c.lineWidth = 2;
+      c.stroke();
+
+      c.beginPath();
+      for (let i = 0; i < 6; i += 2) {
+        const angle = (i * Math.PI) / 3 - Math.PI / 6;
+        c.moveTo(0, 0);
+        c.lineTo(Math.cos(angle) * size, Math.sin(angle) * size);
+      }
+      c.strokeStyle = 'rgba(244, 114, 182, 0.75)';
+      c.lineWidth = 1;
+      c.stroke();
+
+      c.rotate(-rot);
+      c.fillStyle = '#f5f3ff';
+      c.font = `bold ${Math.max(10, size * 0.7)}px "IBM Plex Mono", monospace`;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText(String(value), 0, 1);
+      c.restore();
+    };
+
+    const updateEngine = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const activeParticles = diceParticlesRef.current;
+
+      for (let i = activeParticles.length - 1; i >= 0; i--) {
+        const particle = activeParticles[i];
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.rotation += particle.vRot;
+        particle.vy += 0.2;
+        particle.alpha -= 0.01;
+
+        ctx.globalAlpha = Math.max(0, particle.alpha);
+        drawD20(
+          ctx,
+          particle.x,
+          particle.y,
+          particle.size,
+          particle.rotation,
+          particle.value
+        );
+
+        if (particle.alpha <= 0) {
+          activeParticles.splice(i, 1);
+        }
+      }
+
+      ctx.globalAlpha = 1;
+      animId = requestAnimationFrame(updateEngine);
+    };
+
+    updateEngine();
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      cancelAnimationFrame(animId);
+    };
+  }, []);
 
   const handleCharacterDone = async (charData: CharacterPayload) => {
     if (!game || joining) return;
@@ -294,6 +518,7 @@ export default function GameRoom({ params }: { params: { code: string } }) {
     const userText = inputMessage.trim();
     setInputMessage('');
     setIsGMLoading(true);
+    triggerDiceFromUser(currentPlayer.user_name);
 
     try {
       const supabase = getSupabaseBrowserClient();
@@ -363,6 +588,34 @@ export default function GameRoom({ params }: { params: { code: string } }) {
     }
   };
 
+  const recordPosition = useCallback((name: string, el: HTMLDivElement | null) => {
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    playerPositionsRef.current[name] = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+  }, []);
+
+  useEffect(() => {
+    const refreshPositions = () => {
+      Object.keys(playerPositionsRef.current).forEach((name) => {
+        const nodes = document.querySelectorAll(`[data-player-anchor="${CSS.escape(name)}"]`);
+        const el = nodes[0] as HTMLDivElement | undefined;
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          playerPositionsRef.current[name] = {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+          };
+        }
+      });
+    };
+
+    window.addEventListener('resize', refreshPositions);
+    return () => window.removeEventListener('resize', refreshPositions);
+  }, []);
+
   if (bootError) {
     return (
       <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
@@ -385,7 +638,7 @@ export default function GameRoom({ params }: { params: { code: string } }) {
   if (!game) {
     return (
       <div className="min-h-screen bg-black text-purple-500 flex items-center justify-center font-mono text-xs tracking-widest animate-pulse">
-        BOOTING AA HYPERVISOR...
+        BOOTING MATRIX BOARD...
       </div>
     );
   }
@@ -394,133 +647,132 @@ export default function GameRoom({ params }: { params: { code: string } }) {
     return <CharacterSetup onFinish={handleCharacterDone} />;
   }
 
-  const hpRatio = Math.max(0, Math.min(1, currentPlayer.current_hp / currentPlayer.max_hp));
+  const adjacentPlayers = players.filter(
+    (player) => player.user_name !== currentPlayer.user_name
+  );
+  const leftParty = adjacentPlayers.slice(0, Math.ceil(adjacentPlayers.length / 2));
+  const rightParty = adjacentPlayers.slice(Math.ceil(adjacentPlayers.length / 2));
 
   return (
-    <div className="min-h-screen text-neutral-100 flex flex-col overflow-hidden antialiased select-none relative bg-neutral-950">
-      {/* AA/AAA Panoramic Environmental Cinematic Backdrop Graphic */}
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col overflow-hidden antialiased select-none relative">
+      {/* Dynamic Simulation Overlay Layer */}
+      <canvas ref={canvasRef} className="absolute inset-0 z-40 pointer-events-none" />
+
+      {/* Panoramic Curated Tabletop Scene Backdrop */}
       <div
-        className="absolute inset-0 bg-cover bg-center -z-20 opacity-40 ken-burns"
-        style={{ backgroundImage: `url(${assetLibrary.background})` }}
+        className="absolute inset-0 bg-cover bg-center -z-20 opacity-25 ken-burns"
+        style={{ backgroundImage: `url(${assetLibrary.boardArt})` }}
         aria-hidden
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/40 to-transparent -z-10" />
-      <div className="absolute inset-0 bg-gradient-to-b from-neutral-950/90 via-neutral-950/70 to-neutral-950 -z-10" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-black/80 -z-10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/55 to-transparent -z-10" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_10%,rgba(10,10,10,0.85)_75%,#0a0a0a_100%)] -z-10" />
 
-      {/* Main Glass Header Control Desk Panel */}
-      <header className="border-b border-white/10 bg-neutral-950/60 backdrop-blur-2xl px-4 sm:px-6 py-4 flex justify-between items-center shadow-[0_10px_50px_rgba(0,0,0,0.9)] z-20 gap-3">
+      <header className="relative z-20 border-b border-white/10 bg-neutral-950/55 backdrop-blur-2xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-[0_0_15px_#a855f7] animate-pulse shrink-0" />
-          <h1 className="text-sm font-black tracking-widest uppercase bg-gradient-to-r from-purple-400 via-pink-400 to-red-500 bg-clip-text text-transparent filter drop-shadow-[0_2px_10px_rgba(168,85,247,0.5)] truncate font-display">
-            Voidline Console OS
-          </h1>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-          <div className="hidden sm:flex bg-black/60 border border-white/5 px-4 py-1.5 rounded-xl items-center gap-2 shadow-inner">
-            <span className="text-[10px] uppercase font-mono tracking-widest text-neutral-500">
-              Session Registry:
-            </span>
-            <span className="font-mono text-sm text-purple-400 font-black tracking-widest">
-              {sessionCode}
-            </span>
+          <div className="min-w-0">
+            <h1 className="font-display text-sm font-black tracking-widest uppercase bg-gradient-to-r from-purple-400 via-pink-400 to-red-500 bg-clip-text text-transparent truncate">
+              Voidline Tactical Board
+            </h1>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
+              Session {sessionCode}
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsTrayOpen((open) => !open)}
-            className={`px-4 sm:px-5 py-2.5 text-xs font-mono font-bold tracking-widest uppercase rounded-xl border transition-all duration-300 transform active:scale-95 shadow-lg ${
-              isTrayOpen
-                ? 'bg-gradient-to-r from-purple-600 to-pink-600 border-purple-400 text-white shadow-[0_0_25px_rgba(168,85,247,0.5)]'
-                : 'bg-neutral-900/80 border-white/10 text-neutral-300 hover:border-purple-500/50 hover:bg-neutral-800'
-            }`}
-          >
-            Character Arsenal
-          </button>
         </div>
+        <button
+          type="button"
+          onClick={() => setIsTrayOpen((open) => !open)}
+          className={`px-4 py-2 text-[10px] font-mono font-bold tracking-widest uppercase rounded-xl border transition-all ${
+            isTrayOpen
+              ? 'bg-gradient-to-r from-purple-600 to-pink-600 border-purple-400 text-white'
+              : 'bg-neutral-900/80 border-white/10 text-neutral-300 hover:border-purple-500/50'
+          }`}
+        >
+          Arsenal
+        </button>
       </header>
 
-      {/* Main Structural Matrix Grid Workspace */}
-      <main className="flex-1 grid grid-cols-12 gap-4 lg:gap-6 p-4 lg:p-6 h-[calc(100vh-73px)] relative overflow-hidden">
-        {/* Left Hand HUD Column: Party Cards */}
-        <section className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar z-10 max-h-[28vh] lg:max-h-none order-2 lg:order-1">
-          <h2 className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 px-1">
-            Lobby Manifest
-          </h2>
-          {players.map((player) => {
-            const ratio = Math.max(0, Math.min(1, player.current_hp / player.max_hp));
-            return (
-              <div
-                key={player.id}
-                className="bg-neutral-900/50 border border-white/10 rounded-2xl p-4 shadow-2xl backdrop-blur-xl relative group overflow-hidden transition-all duration-300 hover:border-purple-500/40"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 via-transparent to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="flex items-center gap-3 mb-3 relative">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shadow-xl shrink-0 relative">
-                    <Image
-                      src={assetLibrary.avatar}
-                      alt=""
-                      fill
-                      sizes="40px"
-                      className="object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-black text-sm text-neutral-100 tracking-wide truncate">
-                      {player.user_name}
-                    </h3>
-                    <span className="text-[9px] px-2 py-0.5 rounded-md bg-black/60 border border-white/5 font-mono uppercase text-purple-300 tracking-wider inline-block mt-0.5">
-                      {player.avatar_class}
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-2 relative">
-                  <div className="flex justify-between text-[10px] font-mono uppercase tracking-wider text-neutral-400">
-                    <span>
-                      {player.current_hp}/{player.max_hp} HP
-                    </span>
-                    <span>CHA {player.stats.CHA}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-black/70 overflow-hidden border border-white/5">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-red-600 via-pink-500 to-purple-500 shadow-[0_0_12px_rgba(236,72,153,0.6)] transition-all"
-                      style={{ width: `${ratio * 100}%` }}
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-1 text-[9px] font-mono text-neutral-500 uppercase tracking-wider">
-                    <span>STR {player.stats.STR}</span>
-                    <span>DEX {player.stats.DEX}</span>
-                    <span>CON {player.stats.CON}</span>
-                  </div>
-                </div>
+      <main className="relative z-10 flex-1 grid grid-cols-12 gap-3 sm:gap-4 p-3 sm:p-4 h-[calc(100vh-61px)] max-h-[calc(100vh-61px)] overflow-hidden">
+        {/* Left Flank Combatants */}
+        <section className="col-span-12 sm:col-span-2 flex sm:flex-col justify-center gap-3 z-10 order-2 sm:order-1 overflow-x-auto sm:overflow-y-auto custom-scrollbar">
+          {leftParty.length === 0 ? (
+            <div className="hidden sm:block text-[10px] font-mono uppercase tracking-widest text-neutral-600 border border-dashed border-white/10 rounded-2xl p-4 text-center">
+              Left flank open
+            </div>
+          ) : (
+            leftParty.map((player) => (
+              <div key={player.id} data-player-anchor={player.user_name}>
+                <PlayerBoardCard player={player} onMount={recordPosition} />
               </div>
-            );
-          })}
+            ))
+          )}
         </section>
 
-        {/* Center / Game Narrative Log Terminal Deck */}
-        <section className="col-span-12 lg:col-span-6 flex flex-col min-h-0 z-10 order-1 lg:order-2 h-[52vh] lg:h-auto">
-          <div className="flex-1 relative rounded-3xl border border-white/10 bg-neutral-950/40 backdrop-blur-2xl shadow-[0_30px_80px_rgba(0,0,0,0.75)] overflow-hidden flex flex-col">
-            <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/40 to-transparent pointer-events-none z-[1]" />
-            <div className="relative z-[2] border-b border-white/5 px-5 py-3 flex items-center justify-between bg-black/30">
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-                  Narrative Continuum
+        {/* Center Lane: GM Head + Active Operative + Narrative Terminal */}
+        <section className="col-span-12 sm:col-span-8 flex flex-col gap-3 min-h-0 z-10 order-1 sm:order-2">
+          {/* Imposing Game Master Avatar Card */}
+          <div
+            className={`mx-auto w-full max-w-md rounded-3xl border border-purple-400/40 bg-black/55 backdrop-blur-xl shadow-[0_0_50px_rgba(168,85,247,0.25)] overflow-hidden animate-float ${
+              isGMLoading ? 'gm-breathe' : ''
+            }`}
+          >
+            <div className="flex items-center gap-4 p-4">
+              <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border border-purple-300/40 shrink-0 shadow-[0_0_24px_rgba(236,72,153,0.35)]">
+                <Image
+                  src={assetLibrary.gmAvatar}
+                  alt="Game Master"
+                  fill
+                  sizes="80px"
+                  className="object-cover"
+                  priority
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-purple-300">
+                  Game Master
                 </p>
-                <p className="text-xs text-neutral-300 font-display tracking-wide">
-                  Live table feed · Aden / Edward / Jamie
+                <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-neutral-50">
+                  Void Arbiter
+                </h2>
+                <p className="text-[11px] text-neutral-400 line-clamp-2 mt-1">
+                  {isGMLoading
+                    ? 'Weaving chaos across the board...'
+                    : game.current_narrative}
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Active user centered on the board */}
+          <div
+            className="mx-auto w-full max-w-sm"
+            data-player-anchor={currentPlayer.user_name}
+          >
+            <PlayerBoardCard
+              player={currentPlayer}
+              emphasized
+              onMount={recordPosition}
+            />
+          </div>
+
+          {/* Narrative Continuum Terminal */}
+          <div className="flex-1 min-h-0 rounded-3xl border border-white/10 bg-neutral-950/45 backdrop-blur-2xl shadow-[0_30px_80px_rgba(0,0,0,0.65)] overflow-hidden flex flex-col relative">
+            <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/35 to-transparent pointer-events-none z-[1]" />
+            <div className="relative z-[2] border-b border-white/5 px-4 py-2.5 flex items-center justify-between bg-black/25">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
+                Narrative Continuum
+              </p>
               {isGMLoading && (
                 <span className="text-[10px] font-mono uppercase tracking-widest text-purple-300 animate-pulse">
-                  GM weaving chaos...
+                  Dice in flight...
                 </span>
               )}
             </div>
 
-            <div className="relative z-[2] flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-3 custom-scrollbar">
+            <div className="relative z-[2] flex-1 overflow-y-auto px-4 py-3 space-y-2.5 custom-scrollbar">
               {messages.length === 0 && (
                 <div className="text-xs font-mono text-neutral-500 border border-dashed border-white/10 rounded-2xl p-4 bg-black/20">
-                  The dungeon holds its breath. Declare an unhinged action below.
+                  The tactical grid is quiet. Execute an action to hurl d20s across the board.
                 </div>
               )}
 
@@ -530,9 +782,9 @@ export default function GameRoom({ params }: { params: { code: string } }) {
                 return (
                   <div
                     key={message.id}
-                    className={`max-w-2xl rounded-2xl border px-4 py-3 backdrop-blur-md ${
+                    className={`max-w-2xl rounded-2xl border px-3.5 py-2.5 backdrop-blur-md ${
                       isGm
-                        ? 'border-purple-500/30 bg-purple-950/30 shadow-[0_0_30px_rgba(168,85,247,0.12)]'
+                        ? 'border-purple-500/30 bg-purple-950/30'
                         : isSelf
                           ? 'border-white/15 bg-neutral-900/70 ml-auto'
                           : 'border-white/10 bg-black/35'
@@ -556,17 +808,11 @@ export default function GameRoom({ params }: { params: { code: string } }) {
                   </div>
                 );
               })}
-
-              {isGMLoading && (
-                <div className="max-w-2xl rounded-2xl border border-purple-500/20 bg-purple-950/20 px-4 py-3 text-xs font-mono text-purple-200/80 animate-pulse">
-                  Reality engine chewing on your nonsense...
-                </div>
-              )}
               <div ref={terminalEndRef} />
             </div>
 
             <form
-              className="relative z-[2] border-t border-white/10 p-4 bg-black/40 space-y-2"
+              className="relative z-[2] border-t border-white/10 p-3 sm:p-4 bg-black/40 space-y-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 void handleExecuteAction();
@@ -581,196 +827,97 @@ export default function GameRoom({ params }: { params: { code: string } }) {
                     void handleExecuteAction();
                   }
                 }}
-                rows={3}
-                placeholder="Declare your action, insult the gods, roll chaos into the void..."
-                className="w-full resize-none bg-neutral-950/80 border border-white/10 focus:border-purple-500 rounded-2xl px-4 py-3 text-sm text-neutral-100 focus:outline-none transition-all shadow-inner"
+                rows={2}
+                placeholder="Declare your action — dice will erupt from your board card..."
+                className="w-full resize-none bg-neutral-950/80 border border-white/10 focus:border-purple-500 rounded-2xl px-4 py-3 text-sm text-neutral-100 focus:outline-none transition-all"
                 disabled={isGMLoading}
               />
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[10px] font-mono text-neutral-600 uppercase tracking-wider">
-                  Enter to send · Shift+Enter for newline
+                  Enter to throw · Shift+Enter newline
                 </p>
                 <button
                   type="submit"
                   disabled={!inputMessage.trim() || isGMLoading}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-40 text-white font-bold uppercase tracking-wider text-xs px-5 py-3 rounded-xl transition-all border border-purple-400/30 shadow-[0_0_24px_rgba(168,85,247,0.35)]"
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-40 text-white font-bold uppercase tracking-wider text-xs px-5 py-2.5 rounded-xl transition-all border border-purple-400/30 shadow-[0_0_24px_rgba(168,85,247,0.35)]"
                 >
-                  {isGMLoading ? 'Resolving...' : 'Execute Action'}
+                  {isGMLoading ? 'Resolving...' : 'Execute & Throw'}
                 </button>
               </div>
             </form>
           </div>
         </section>
 
-        {/* Right Column: persistent summary + mobile-friendly arsenal peek */}
-        <section className="hidden lg:flex col-span-3 flex-col gap-4 z-10 order-3">
-          <div className="rounded-3xl border border-white/10 bg-neutral-900/40 backdrop-blur-2xl p-5 shadow-2xl space-y-4">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-              Active Operative
-            </p>
-            <div className="flex items-center gap-4">
-              <div className="portrait-ring shrink-0">
-                <div className="portrait-ring-spin" aria-hidden />
-                <div className="portrait-ring-core">
-                  <Image
-                    src={assetLibrary.avatar}
-                    alt={`${currentPlayer.user_name} portrait`}
-                    fill
-                    sizes="72px"
-                    className="object-cover"
-                  />
-                </div>
+        {/* Right Flank Combatants */}
+        <section className="col-span-12 sm:col-span-2 flex sm:flex-col justify-center gap-3 z-10 order-3 overflow-x-auto sm:overflow-y-auto custom-scrollbar">
+          {rightParty.length === 0 ? (
+            <div className="hidden sm:block text-[10px] font-mono uppercase tracking-widest text-neutral-600 border border-dashed border-white/10 rounded-2xl p-4 text-center">
+              Right flank open
+            </div>
+          ) : (
+            rightParty.map((player) => (
+              <div key={player.id} data-player-anchor={player.user_name}>
+                <PlayerBoardCard player={player} onMount={recordPosition} />
               </div>
-              <div className="min-w-0">
-                <h3 className="font-display font-black text-neutral-50 tracking-wide truncate">
-                  {currentPlayer.user_name}
-                </h3>
-                <p className="text-[10px] font-mono uppercase tracking-widest text-purple-300">
-                  {currentPlayer.avatar_class}
-                </p>
-                <p className="text-[10px] font-mono text-neutral-500 mt-1">
-                  HP {currentPlayer.current_hp}/{currentPlayer.max_hp}
-                </p>
-              </div>
-            </div>
-            <div className="h-1.5 rounded-full bg-black/70 overflow-hidden border border-white/5">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-purple-500 to-pink-500"
-                style={{ width: `${hpRatio * 100}%` }}
-              />
-            </div>
-            <p className="text-xs text-neutral-400 leading-relaxed line-clamp-4">
-              {game.current_narrative}
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-neutral-900/30 backdrop-blur-xl p-4 flex-1">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-3">
-              Arsenal Preview
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {inventorySlots.map((slot) => (
-                <button
-                  key={slot.id}
-                  type="button"
-                  onClick={() => setIsTrayOpen(true)}
-                  className="inventory-socket aspect-square rounded-2xl border border-white/10 bg-black/40 flex items-center justify-center p-3 transition-all duration-300 hover:border-purple-400/60 hover:bg-purple-950/30 hover:shadow-[0_0_24px_rgba(168,85,247,0.35)]"
-                  aria-label={slot.label}
-                  title={slot.label}
-                >
-                  <Image
-                    src={slot.src}
-                    alt=""
-                    width={64}
-                    height={64}
-                    unoptimized
-                    className="inventory-glyph w-full h-full object-contain opacity-25 transition-all duration-300"
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
+            ))
+          )}
         </section>
-
-        {/* Sliding AA/AAA Equipment Paperdoll Arsenal Drawer Panel Tray */}
-        <aside
-          className={`fixed top-[73px] right-0 bottom-0 w-full sm:w-[380px] z-40 transform transition-transform duration-500 ease-out border-l border-white/10 bg-neutral-950/85 backdrop-blur-2xl shadow-[-30px_0_80px_rgba(0,0,0,0.75)] ${
-            isTrayOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          <div className="h-full overflow-y-auto custom-scrollbar p-6 space-y-6">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-                  Character Arsenal
-                </p>
-                <h2 className="font-display text-lg font-black tracking-wide text-neutral-50">
-                  Paperdoll Matrix
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsTrayOpen(false)}
-                className="text-[10px] font-mono uppercase tracking-widest px-3 py-2 rounded-xl border border-white/10 text-neutral-400 hover:text-white hover:border-purple-400/40 transition-all"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="flex flex-col items-center gap-4 py-2">
-              <div className="portrait-ring portrait-ring-lg">
-                <div className="portrait-ring-spin" aria-hidden />
-                <div className="portrait-ring-core">
-                  <Image
-                    src={assetLibrary.avatar}
-                    alt={`${currentPlayer.user_name} hero portrait`}
-                    fill
-                    sizes="148px"
-                    priority
-                    className="object-cover"
-                  />
-                </div>
-              </div>
-              <div className="text-center">
-                <h3 className="font-display text-xl font-black text-neutral-50 tracking-wide">
-                  {currentPlayer.user_name}
-                </h3>
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-purple-300 mt-1">
-                  {currentPlayer.avatar_class}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono uppercase tracking-wider text-neutral-400 border border-white/10 rounded-2xl p-3 bg-black/30">
-              {(
-                Object.entries(currentPlayer.stats) as Array<[keyof AbilityScores, number]>
-              ).map(([stat, value]) => (
-                <div key={stat} className="py-1">
-                  <div className="text-neutral-500">{stat}</div>
-                  <div className="text-neutral-100 font-black text-sm">{value}</div>
-                </div>
-              ))}
-            </div>
-
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 mb-3">
-                Equipment Grid
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                {inventorySlots.map((slot) => (
-                  <div
-                    key={slot.id}
-                    className="inventory-socket aspect-square rounded-2xl border border-white/10 bg-gradient-to-b from-neutral-900/80 to-black/70 flex items-center justify-center p-4 transition-all duration-300 hover:border-purple-400/70 hover:shadow-[0_0_30px_rgba(168,85,247,0.45)] hover:bg-purple-950/40"
-                    title={slot.label}
-                    aria-label={slot.label}
-                  >
-                    <Image
-                      src={slot.src}
-                      alt=""
-                      width={80}
-                      height={80}
-                      unoptimized
-                      className="inventory-glyph w-full h-full object-contain opacity-30 transition-all duration-300"
-                    />
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 text-[10px] font-mono text-neutral-600 uppercase tracking-wider text-center">
-                Hover sockets to ignite relic chroma
-              </p>
-            </div>
-          </div>
-        </aside>
-
-        {isTrayOpen && (
-          <button
-            type="button"
-            aria-label="Close arsenal tray"
-            className="fixed inset-0 top-[73px] bg-black/40 z-30 lg:bg-black/20"
-            onClick={() => setIsTrayOpen(false)}
-          />
-        )}
       </main>
+
+      {/* Arsenal tray retained for equipment art */}
+      <aside
+        className={`fixed top-[61px] right-0 bottom-0 w-full sm:w-[360px] z-50 transform transition-transform duration-500 ease-out border-l border-white/10 bg-neutral-950/90 backdrop-blur-2xl ${
+          isTrayOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="h-full overflow-y-auto custom-scrollbar p-5 space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
+                Character Arsenal
+              </p>
+              <h2 className="font-display text-lg font-black tracking-wide text-neutral-50">
+                {currentPlayer.user_name}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsTrayOpen(false)}
+              className="text-[10px] font-mono uppercase tracking-widest px-3 py-2 rounded-xl border border-white/10 text-neutral-400 hover:text-white"
+            >
+              Close
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {inventorySlots.map((slot) => (
+              <div
+                key={slot.id}
+                className="inventory-socket aspect-square rounded-2xl border border-white/10 bg-black/50 flex items-center justify-center p-4 transition-all duration-300 hover:border-purple-400/70 hover:shadow-[0_0_30px_rgba(168,85,247,0.45)]"
+                title={slot.label}
+                aria-label={slot.label}
+              >
+                <Image
+                  src={slot.src}
+                  alt=""
+                  width={72}
+                  height={72}
+                  unoptimized
+                  className="inventory-glyph w-full h-full object-contain opacity-30 transition-all duration-300"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      {isTrayOpen && (
+        <button
+          type="button"
+          aria-label="Close arsenal tray"
+          className="fixed inset-0 top-[61px] bg-black/35 z-40"
+          onClick={() => setIsTrayOpen(false)}
+        />
+      )}
     </div>
   );
 }
