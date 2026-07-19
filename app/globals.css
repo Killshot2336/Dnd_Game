@@ -24,15 +24,96 @@ body {
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
-::-webkit-scrollbar {
+::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
 
-::-webkit-scrollbar-track {
+::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb {
   background: #404040;
   border-radius: 999px;
+}
+
+@keyframes ken-burns {
+  0% {
+    transform: scale(1.05) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.12) translate3d(-1.5%, -1%, 0);
+  }
+  100% {
+    transform: scale(1.05) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes spin-neon {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ken-burns {
+  animation: ken-burns 28s ease-in-out infinite;
+  will-change: transform;
+}
+
+.portrait-ring {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 9999px;
+  padding: 3px;
+}
+
+.portrait-ring-lg {
+  width: 148px;
+  height: 148px;
+  padding: 4px;
+}
+
+.portrait-ring-spin {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    #a855f7,
+    #ec4899,
+    #ef4444,
+    #22d3ee,
+    #a855f7
+  );
+  animation: spin-neon 4s linear infinite;
+  filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.65));
+}
+
+.portrait-ring-core {
+  position: absolute;
+  inset: 3px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: #0a0a0a;
+  border: 2px solid rgba(10, 10, 10, 0.95);
+  z-index: 1;
+}
+
+.portrait-ring-lg .portrait-ring-core {
+  inset: 4px;
+}
+
+.inventory-socket:hover .inventory-glyph {
+  opacity: 1;
+  filter: invert(1) drop-shadow(0 0 10px rgba(236, 72, 153, 0.85))
+    drop-shadow(0 0 18px rgba(168, 85, 247, 0.7));
+  transform: scale(1.06);
+}
+
+.inventory-glyph {
+  filter: invert(0.85) sepia(0.2) saturate(0.4);
 }
