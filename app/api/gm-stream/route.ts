@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { sanitizeHistory } from '@/lib/game-guards';
 import type { HistoryMessage } from '@/types/database';
 
 interface OpenRouterChoice {
   message?: {
-    content?: string;
+    content?: string | Array<{ type?: string; text?: string }>;
   };
 }
 
@@ -14,21 +15,70 @@ interface OpenRouterResponse {
   };
 }
 
+function extractReplyText(data: OpenRouterResponse): string | null {
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content === 'string') {
+    const trimmed = content.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (Array.isArray(content)) {
+    const joined = content
+      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+      .join('')
+      .trim();
+    return joined.length > 0 ? joined : null;
+  }
+
+  return null;
+}
+
+function reconstructPayload(raw: unknown): {
+  playerInput: string;
+  sender: string;
+  history: HistoryMessage[];
+} {
+  const body =
+    raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : ({} as Record<string, unknown>);
+
+  const playerInputRaw =
+    typeof body.playerInput === 'string'
+      ? body.playerInput
+      : typeof body.input === 'string'
+        ? body.input
+        : typeof body.content === 'string'
+          ? body.content
+          : '';
+
+  const senderRaw =
+    typeof body.sender === 'string'
+      ? body.sender
+      : typeof body.user_name === 'string'
+        ? body.user_name
+        : 'Unknown';
+
+  const playerInput = playerInputRaw.trim() || 'I stare into the void and wait for chaos.';
+  const sender = senderRaw.trim().slice(0, 50) || 'Unknown';
+  const history = sanitizeHistory(body.history);
+
+  return { playerInput, sender, history };
+}
+
+function publicErrorReply(fallback: string): NextResponse {
+  // Never echo upstream auth/provider secrets into the client payload.
+  return NextResponse.json({ reply: fallback });
+}
+
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as {
-      playerInput?: string;
-      sender?: string;
-      history?: HistoryMessage[];
-    };
-
-    const playerInput = typeof body.playerInput === 'string' ? body.playerInput.trim() : '';
-    const sender = typeof body.sender === 'string' ? body.sender.trim() : 'Unknown';
-    const history = Array.isArray(body.history) ? body.history : [];
-
-    if (!playerInput) {
-      return NextResponse.json({ reply: 'You muttered nothing. Speak an action.' }, { status: 400 });
+    let rawBody: unknown = null;
+    try {
+      rawBody = await req.json();
+    } catch {
+      rawBody = null;
     }
+
+    const { playerInput, sender, history } = reconstructPayload(rawBody);
 
     const contextHistory = history.map((message) => ({
       role: message.sender === 'GM' ? ('assistant' as const) : ('user' as const),
@@ -49,54 +99,66 @@ export async function POST(req: Request) {
 
     const openRouterApiKey = process.env.OPENROUTER_API_KEY;
     if (!openRouterApiKey) {
-      return NextResponse.json(
-        { reply: '[System Error: Missing OpenRouter Authentication Key in Backend Context]' },
-        { status: 500 }
+      console.error('OPENROUTER_API_KEY missing in server environment');
+      return publicErrorReply(
+        '[System Error: Missing OpenRouter Authentication Key in Backend Context]'
       );
     }
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openRouterApiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
-        'X-Title': 'Voidline VTT',
-      },
-      body: JSON.stringify({
-        model: 'gryphe/mythomax-l2-13b',
-        messages: [
-          { role: 'system', content: systemInstruction },
-          ...contextHistory,
-          { role: 'user', content: `${sender}: ${playerInput}` },
-        ],
-        temperature: 0.85,
-        max_tokens: 250,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openRouterApiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+          'X-Title': 'Voidline VTT',
+        },
+        body: JSON.stringify({
+          model: 'gryphe/mythomax-l2-13b',
+          messages: [
+            { role: 'system', content: systemInstruction },
+            ...contextHistory,
+            { role: 'user', content: `${sender}: ${playerInput}` },
+          ],
+          temperature: 0.85,
+          max_tokens: 250,
+        }),
+      });
+    } catch (networkError) {
+      console.error('OpenRouter network failure:', networkError);
+      return publicErrorReply(
+        'The reality engine lost signal mid-cast. Drop that unhinged action on me again.'
+      );
+    }
 
-    const data = (await response.json()) as OpenRouterResponse;
+    let data: OpenRouterResponse = {};
+    try {
+      data = (await response.json()) as OpenRouterResponse;
+    } catch (parseError) {
+      console.error('OpenRouter JSON parse failure:', parseError);
+      return publicErrorReply(
+        'The simulation warped into static. Try that crazy action one more time.'
+      );
+    }
 
     if (!response.ok) {
-      console.error('OpenRouter error payload:', data);
-      return NextResponse.json({
-        reply:
-          data.error?.message ||
-          'The reality engine cracked. Drop that unhinged action on me again.',
+      // Log server-side only; strip provider auth details from client replies.
+      console.error('OpenRouter upstream rejection', {
+        status: response.status,
+        message: data.error?.message ? '[redacted-provider-message]' : 'none',
       });
+      return publicErrorReply(
+        'The reality engine cracked. Drop that unhinged action on me again.'
+      );
     }
 
-    if (!data.choices || data.choices.length === 0) {
-      return NextResponse.json({
-        reply: 'The reality engine cracked. Drop that unhinged action on me again.',
-      });
-    }
-
-    const replyText = data.choices[0]?.message?.content?.trim();
+    const replyText = extractReplyText(data);
     if (!replyText) {
-      return NextResponse.json({
-        reply: 'The simulation warped into static. Try that crazy action one more time.',
-      });
+      return publicErrorReply(
+        'The simulation warped into static. Try that crazy action one more time.'
+      );
     }
 
     return NextResponse.json({ reply: replyText });

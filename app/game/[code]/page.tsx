@@ -2,8 +2,31 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import CharacterSetup from '@/components/CharacterSetup';
-import { getSupabaseBrowserClient } from '@/lib/supabase';
+import {
+  createOptimisticMessage,
+  isUniqueViolation,
+  mergeMessageLedger,
+  mergePlayerLedger,
+  normalizeGame,
+  normalizeMessage,
+  normalizePlayer,
+  safeHp,
+  safeStat,
+  sanitizeCharacterPayload,
+} from '@/lib/game-guards';
+import {
+  readCachedPlayerSeat,
+  writeCachedPlayerSeat,
+  type CachedPlayerSeat,
+} from '@/lib/player-session';
+import {
+  getSupabaseBrowserClient,
+  mapChannelStatus,
+  safeRemoveChannel,
+  type ChannelHealth,
+} from '@/lib/supabase';
 import type {
   AbilityScores,
   CharacterPayload,
@@ -13,6 +36,7 @@ import type {
 } from '@/types/database';
 
 const ICON_BASE = 'https://raw.githubusercontent.com/game-icons/icons/master';
+const HEARTBEAT_MS = 12_000;
 
 const assetLibrary = {
   boardArt:
@@ -51,43 +75,6 @@ interface DiceParticle {
   value: number;
 }
 
-function parseStats(raw: unknown): AbilityScores {
-  const fallback: AbilityScores = { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 };
-  if (!raw || typeof raw !== 'object') return fallback;
-  const source = raw as Record<string, unknown>;
-  return {
-    STR: typeof source.STR === 'number' ? source.STR : 10,
-    DEX: typeof source.DEX === 'number' ? source.DEX : 10,
-    CON: typeof source.CON === 'number' ? source.CON : 10,
-    INT: typeof source.INT === 'number' ? source.INT : 10,
-    WIS: typeof source.WIS === 'number' ? source.WIS : 10,
-    CHA: typeof source.CHA === 'number' ? source.CHA : 10,
-  };
-}
-
-function normalizePlayer(row: Record<string, unknown>): PlayerEntity {
-  return {
-    id: String(row.id),
-    game_id: String(row.game_id),
-    user_name: String(row.user_name),
-    avatar_class: String(row.avatar_class),
-    current_hp: typeof row.current_hp === 'number' ? row.current_hp : 15,
-    max_hp: typeof row.max_hp === 'number' ? row.max_hp : 15,
-    stats: parseStats(row.stats),
-    created_at: String(row.created_at ?? ''),
-  };
-}
-
-function normalizeMessage(row: Record<string, unknown>): ThreadMessage {
-  return {
-    id: Number(row.id),
-    game_id: String(row.game_id),
-    sender: String(row.sender),
-    content: String(row.content),
-    created_at: String(row.created_at ?? ''),
-  };
-}
-
 function PlayerBoardCard({
   player,
   emphasized,
@@ -97,11 +84,12 @@ function PlayerBoardCard({
   emphasized?: boolean;
   onMount: (name: string, el: HTMLDivElement | null) => void;
 }) {
-  const ratio = Math.max(0, Math.min(1, player.current_hp / player.max_hp));
+  const hp = safeHp(player);
+  const cha = safeStat(player, 'CHA');
 
   return (
     <div
-      ref={(el) => onMount(player.user_name, el)}
+      ref={(el) => onMount(player?.user_name ?? 'unknown', el)}
       className={`relative overflow-hidden rounded-2xl border backdrop-blur-md shadow-2xl transition-all duration-300 ${
         emphasized
           ? 'border-purple-400/60 bg-purple-950/40 shadow-[0_0_40px_rgba(168,85,247,0.35)] scale-105'
@@ -122,24 +110,24 @@ function PlayerBoardCard({
           </div>
           <div className="min-w-0">
             <h4 className="font-black text-xs sm:text-sm text-neutral-100 truncate tracking-wide">
-              {player.user_name}
+              {player?.user_name ?? 'Unknown'}
             </h4>
             <p className="text-[9px] font-mono uppercase tracking-widest text-purple-300 truncate">
-              {player.avatar_class}
+              {player?.avatar_class ?? 'Adventurer'}
             </p>
           </div>
         </div>
         <div className="space-y-1.5">
           <div className="flex justify-between text-[10px] font-mono uppercase tracking-wider text-neutral-400">
             <span>
-              {player.current_hp}/{player.max_hp} HP
+              {hp.current}/{hp.max} HP
             </span>
-            <span>CHA {player.stats.CHA}</span>
+            <span>CHA {cha}</span>
           </div>
           <div className="h-1.5 rounded-full bg-black/70 overflow-hidden border border-white/5">
             <div
               className="h-full rounded-full bg-gradient-to-r from-red-600 via-pink-500 to-purple-500"
-              style={{ width: `${ratio * 100}%` }}
+              style={{ width: `${hp.ratio * 100}%` }}
             />
           </div>
         </div>
@@ -149,7 +137,7 @@ function PlayerBoardCard({
 }
 
 export default function GameRoom({ params }: { params: { code: string } }) {
-  const sessionCode = params.code.toUpperCase();
+  const sessionCode = String(params?.code ?? '').toUpperCase();
   const [game, setGame] = useState<GameRecord | null>(null);
   const [players, setPlayers] = useState<PlayerEntity[]>([]);
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
@@ -159,28 +147,59 @@ export default function GameRoom({ params }: { params: { code: string } }) {
   const [isTrayOpen, setIsTrayOpen] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [channelHealth, setChannelHealth] = useState<ChannelHealth>('connecting');
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
   const diceParticlesRef = useRef<DiceParticle[]>([]);
   const playerPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
   const currentPlayerNameRef = useRef<string | null>(null);
+  const gameIdRef = useRef<string | null>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const reconnectLockRef = useRef(false);
 
   useEffect(() => {
     currentPlayerNameRef.current = currentPlayer?.user_name ?? null;
   }, [currentPlayer]);
 
+  useEffect(() => {
+    gameIdRef.current = game?.id ?? null;
+  }, [game]);
+
+  const adoptPlayerSeat = useCallback(
+    (player: PlayerEntity, session: string) => {
+      const hardened = normalizePlayer(player as unknown as Record<string, unknown>) ?? player;
+      setCurrentPlayer(hardened);
+      setPlayers((prev) => mergePlayerLedger(prev, hardened));
+      writeCachedPlayerSeat({
+        gameId: hardened.game_id,
+        sessionCode: session,
+        playerId: hardened.id,
+        userName: hardened.user_name,
+        avatarClass: hardened.avatar_class,
+        stats: hardened.stats,
+        savedAt: new Date().toISOString(),
+      });
+    },
+    []
+  );
+
   const triggerDiceFromUser = useCallback((senderName: string) => {
     if (typeof window === 'undefined') return;
-    if (senderName === 'GM') return;
+    if (!senderName || senderName === 'GM') return;
+
+    const fallbackX =
+      typeof window.innerWidth === 'number' ? window.innerWidth / 2 : 200;
+    const fallbackY =
+      typeof window.innerHeight === 'number' ? window.innerHeight - 220 : 400;
 
     const origin = playerPositionsRef.current[senderName] || {
-      x: window.innerWidth / 2,
-      y: window.innerHeight - 220,
+      x: fallbackX,
+      y: fallbackY,
     };
-    const burstCount = 5;
 
-    for (let i = 0; i < burstCount; i++) {
+    for (let i = 0; i < 5; i++) {
       diceParticlesRef.current.push({
         id: Math.random(),
         x: origin.x + (Math.random() - 0.5) * 18,
@@ -196,7 +215,151 @@ export default function GameRoom({ params }: { params: { code: string } }) {
     }
   }, []);
 
+  const refreshRoomState = useCallback(async (gameId: string) => {
+    try {
+      const supabase = getSupabaseBrowserClient();
+
+      const [{ data: gameRow }, { data: playerList }, { data: msgList }] = await Promise.all([
+        supabase.from('games').select('*').eq('id', gameId).maybeSingle(),
+        supabase.from('players').select('*').eq('game_id', gameId),
+        supabase
+          .from('messages')
+          .select('*')
+          .eq('game_id', gameId)
+          .order('created_at', { ascending: true }),
+      ]);
+
+      const nextGame = normalizeGame(gameRow as Record<string, unknown> | null);
+      if (nextGame) {
+        setGame(nextGame);
+      }
+
+      const nextPlayers = (playerList ?? [])
+        .map((row) => normalizePlayer(row as Record<string, unknown>))
+        .filter((row): row is PlayerEntity => row !== null);
+      setPlayers(nextPlayers);
+
+      const nextMessages = (msgList ?? [])
+        .map((row) => normalizeMessage(row as Record<string, unknown>))
+        .filter((row): row is ThreadMessage => row !== null);
+      setMessages(nextMessages);
+
+      const cached = readCachedPlayerSeat(sessionCode);
+      if (cached) {
+        const restored =
+          nextPlayers.find((player) => player.id === cached.playerId) ||
+          nextPlayers.find(
+            (player) => player.user_name.toLowerCase() === cached.userName.toLowerCase()
+          );
+        if (restored) {
+          adoptPlayerSeat(restored, sessionCode);
+        }
+      }
+
+      setSyncNotice(null);
+    } catch (error) {
+      console.error('Room refresh failure:', error);
+      setSyncNotice('Sync degraded — retrying heartbeat…');
+    }
+  }, [adoptPlayerSeat, sessionCode]);
+
+  const attachRealtimeChannel = useCallback(
+    async (gameId: string) => {
+      const supabase = getSupabaseBrowserClient();
+      await safeRemoveChannel(supabase, channelRef.current);
+      channelRef.current = null;
+      setChannelHealth('connecting');
+
+      const channel = supabase
+        .channel(`vtt-lobby-${gameId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'players',
+            filter: `game_id=eq.${gameId}`,
+          },
+          (payload) => {
+            const incoming = normalizePlayer(payload.new as Record<string, unknown>);
+            if (!incoming || incoming.game_id !== gameId) return;
+            setPlayers((prev) => mergePlayerLedger(prev, incoming));
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'players',
+            filter: `game_id=eq.${gameId}`,
+          },
+          (payload) => {
+            const incoming = normalizePlayer(payload.new as Record<string, unknown>);
+            if (!incoming || incoming.game_id !== gameId) return;
+            setPlayers((prev) => mergePlayerLedger(prev, incoming));
+            setCurrentPlayer((prev) =>
+              prev && prev.id === incoming.id ? incoming : prev
+            );
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'games',
+            filter: `id=eq.${gameId}`,
+          },
+          (payload) => {
+            const incoming = normalizeGame(payload.new as Record<string, unknown>);
+            if (!incoming || incoming.id !== gameId) return;
+            setGame(incoming);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `game_id=eq.${gameId}`,
+          },
+          (payload) => {
+            const incoming = normalizeMessage(payload.new as Record<string, unknown>);
+            if (!incoming || incoming.game_id !== gameId) return;
+            setMessages((prev) => mergeMessageLedger(prev, incoming));
+
+            if (
+              incoming.sender !== 'GM' &&
+              incoming.sender !== currentPlayerNameRef.current
+            ) {
+              triggerDiceFromUser(incoming.sender);
+            }
+          }
+        )
+        .subscribe((status) => {
+          const health = mapChannelStatus(status);
+          setChannelHealth(health);
+          if (health === 'joined') {
+            setSyncNotice(null);
+          }
+          if (health === 'degraded' || health === 'closed') {
+            setSyncNotice('Realtime socket interrupted — auto-repair engaged');
+          }
+        });
+
+      channelRef.current = channel;
+    },
+    [triggerDiceFromUser]
+  );
+
   useEffect(() => {
+    if (!sessionCode || sessionCode.length !== 6) {
+      setBootError('Invalid session code. Return to the entryway and launch a valid lobby.');
+      return;
+    }
+
     let cancelled = false;
 
     const fetchGameContext = async () => {
@@ -225,39 +388,34 @@ export default function GameRoom({ params }: { params: { code: string } }) {
             .single();
 
           if (insertError) {
-            throw insertError;
+            if (isUniqueViolation(insertError)) {
+              const retry = await supabase
+                .from('games')
+                .select('*')
+                .eq('session_code', sessionCode)
+                .maybeSingle();
+              if (retry.error) throw retry.error;
+              gameData = retry.data;
+            } else {
+              throw insertError;
+            }
+          } else {
+            gameData = newGame;
           }
-          gameData = newGame;
-        }
-
-        if (cancelled || !gameData) return;
-
-        const typedGame = gameData as GameRecord;
-        setGame(typedGame);
-
-        const { data: playerList, error: playerError } = await supabase
-          .from('players')
-          .select('*')
-          .eq('game_id', typedGame.id);
-
-        if (playerError) {
-          throw playerError;
-        }
-
-        const { data: msgList, error: msgError } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('game_id', typedGame.id)
-          .order('created_at', { ascending: true });
-
-        if (msgError) {
-          throw msgError;
         }
 
         if (cancelled) return;
 
-        setPlayers((playerList ?? []).map((row) => normalizePlayer(row as Record<string, unknown>)));
-        setMessages((msgList ?? []).map((row) => normalizeMessage(row as Record<string, unknown>)));
+        const typedGame = normalizeGame(gameData as Record<string, unknown>);
+        if (!typedGame) {
+          throw new Error('Lobby payload failed structural validation.');
+        }
+
+        setGame(typedGame);
+        await refreshRoomState(typedGame.id);
+        if (!cancelled) {
+          await attachRealtimeChannel(typedGame.id);
+        }
       } catch (error) {
         console.error('Lobby boot failure:', error);
         if (!cancelled) {
@@ -270,101 +428,119 @@ export default function GameRoom({ params }: { params: { code: string } }) {
       }
     };
 
-    fetchGameContext();
+    void fetchGameContext();
 
     return () => {
       cancelled = true;
+      const client = (() => {
+        try {
+          return getSupabaseBrowserClient();
+        } catch {
+          return null;
+        }
+      })();
+      if (client) {
+        void safeRemoveChannel(client, channelRef.current);
+      }
+      channelRef.current = null;
     };
-  }, [sessionCode]);
+  }, [attachRealtimeChannel, refreshRoomState, sessionCode]);
 
+  // Heartbeat: auto-reconnect + re-fetch latest room state without hard refresh
   useEffect(() => {
-    if (!game) return;
+    if (!game?.id) return;
 
-    const supabase = getSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`vtt-lobby-${game.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'players',
-          filter: `game_id=eq.${game.id}`,
-        },
-        (payload) => {
-          const incoming = normalizePlayer(payload.new as Record<string, unknown>);
-          setPlayers((prev) => {
-            if (prev.some((player) => player.id === incoming.id)) return prev;
-            return [...prev, incoming];
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'players',
-          filter: `game_id=eq.${game.id}`,
-        },
-        (payload) => {
-          const incoming = normalizePlayer(payload.new as Record<string, unknown>);
-          setPlayers((prev) =>
-            prev.map((player) => (player.id === incoming.id ? incoming : player))
-          );
-          setCurrentPlayer((prev) => (prev && prev.id === incoming.id ? incoming : prev));
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `game_id=eq.${game.id}`,
-        },
-        (payload) => {
-          const incoming = normalizeMessage(payload.new as Record<string, unknown>);
-          setMessages((prev) => {
-            if (prev.some((message) => message.id === incoming.id)) return prev;
-            return [...prev, incoming];
-          });
+    const pulse = async (force = false) => {
+      if (reconnectLockRef.current) return;
 
-          if (
-            incoming.sender !== 'GM' &&
-            incoming.sender !== currentPlayerNameRef.current
-          ) {
-            triggerDiceFromUser(incoming.sender);
-          }
-        }
-      )
-      .subscribe();
+      const health = channelHealth;
+      const needsRepair = health === 'degraded' || health === 'closed';
+      if (!force && !needsRepair) {
+        return;
+      }
+
+      reconnectLockRef.current = true;
+      try {
+        setSyncNotice('Reconnecting simulation sockets…');
+        await attachRealtimeChannel(game.id);
+        await refreshRoomState(game.id);
+      } catch (error) {
+        console.error('Heartbeat repair failure:', error);
+        setSyncNotice('Heartbeat repair delayed — retrying…');
+      } finally {
+        reconnectLockRef.current = false;
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      void pulse();
+    }, HEARTBEAT_MS);
+
+    const onOnline = () => {
+      void pulse(true);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void pulse(true);
+        void refreshRoomState(game.id);
+      }
+    };
+
+    window.addEventListener('online', onOnline);
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      void supabase.removeChannel(channel);
+      window.clearInterval(intervalId);
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [game, triggerDiceFromUser]);
+  }, [attachRealtimeChannel, channelHealth, game?.id, refreshRoomState]);
 
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isGMLoading]);
 
-  // Infinite Graphics Simulation Engine Loop for Dynamic Dice Rendering
+  // Canvas particle engine with mobile viewport guards
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     let animId = 0;
+    let active = true;
 
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+    const readViewportSize = () => {
+      const visualViewport = window.visualViewport;
+      const width =
+        visualViewport?.width ||
+        window.innerWidth ||
+        document.documentElement?.clientWidth ||
+        320;
+      const height =
+        visualViewport?.height ||
+        window.innerHeight ||
+        document.documentElement?.clientHeight ||
+        568;
+      return {
+        width: Math.max(1, Math.floor(width)),
+        height: Math.max(1, Math.floor(height)),
+      };
     };
 
-    window.addEventListener('resize', resizeCanvas);
+    const resizeCanvas = () => {
+      if (!canvasRef.current) return;
+      const { width, height } = readViewportSize();
+      canvasRef.current.width = width;
+      canvasRef.current.height = height;
+    };
+
     resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    window.visualViewport?.addEventListener('resize', resizeCanvas);
+    window.visualViewport?.addEventListener('scroll', resizeCanvas);
 
     const drawD20 = (
       c: CanvasRenderingContext2D,
@@ -418,7 +594,12 @@ export default function GameRoom({ params }: { params: { code: string } }) {
     };
 
     const updateEngine = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!active || !canvasRef.current) return;
+      const surface = canvasRef.current;
+      const surfaceCtx = surface.getContext('2d');
+      if (!surfaceCtx) return;
+
+      surfaceCtx.clearRect(0, 0, surface.width, surface.height);
       const activeParticles = diceParticlesRef.current;
 
       for (let i = activeParticles.length - 1; i >= 0; i--) {
@@ -429,9 +610,9 @@ export default function GameRoom({ params }: { params: { code: string } }) {
         particle.vy += 0.2;
         particle.alpha -= 0.01;
 
-        ctx.globalAlpha = Math.max(0, particle.alpha);
+        surfaceCtx.globalAlpha = Math.max(0, particle.alpha);
         drawD20(
-          ctx,
+          surfaceCtx,
           particle.x,
           particle.y,
           particle.size,
@@ -444,48 +625,76 @@ export default function GameRoom({ params }: { params: { code: string } }) {
         }
       }
 
-      ctx.globalAlpha = 1;
-      animId = requestAnimationFrame(updateEngine);
+      surfaceCtx.globalAlpha = 1;
+      animId = window.requestAnimationFrame(updateEngine);
     };
 
-    updateEngine();
+    animId = window.requestAnimationFrame(updateEngine);
 
     return () => {
+      active = false;
       window.removeEventListener('resize', resizeCanvas);
-      cancelAnimationFrame(animId);
+      window.visualViewport?.removeEventListener('resize', resizeCanvas);
+      window.visualViewport?.removeEventListener('scroll', resizeCanvas);
+      window.cancelAnimationFrame(animId);
     };
   }, []);
 
-  const handleCharacterDone = async (charData: CharacterPayload) => {
-    if (!game || joining) return;
-    setJoining(true);
-
-    try {
+  const resolveExistingSeat = useCallback(
+    async (
+      gameId: string,
+      userName: string,
+      cached?: CachedPlayerSeat | null
+    ): Promise<PlayerEntity | null> => {
       const supabase = getSupabaseBrowserClient();
-      const { data: existingPlayer, error: existingError } = await supabase
-        .from('players')
-        .select('*')
-        .eq('game_id', game.id)
-        .eq('user_name', charData.name)
-        .maybeSingle();
 
-      if (existingError) {
-        throw existingError;
+      if (cached?.playerId) {
+        const byId = await supabase
+          .from('players')
+          .select('*')
+          .eq('id', cached.playerId)
+          .eq('game_id', gameId)
+          .maybeSingle();
+        const normalizedById = normalizePlayer(byId.data as Record<string, unknown> | null);
+        if (normalizedById) return normalizedById;
       }
 
-      if (existingPlayer) {
-        setCurrentPlayer(normalizePlayer(existingPlayer as Record<string, unknown>));
+      const byName = await supabase
+        .from('players')
+        .select('*')
+        .eq('game_id', gameId)
+        .eq('user_name', userName)
+        .maybeSingle();
+
+      return normalizePlayer(byName.data as Record<string, unknown> | null);
+    },
+    []
+  );
+
+  const handleCharacterDone = async (charData: CharacterPayload) => {
+    if (!game?.id || joining) return;
+    setJoining(true);
+    setBootError(null);
+
+    const sanitized = sanitizeCharacterPayload(charData);
+    const cached = readCachedPlayerSeat(sessionCode);
+
+    try {
+      const existing = await resolveExistingSeat(game.id, sanitized.name, cached);
+      if (existing) {
+        adoptPlayerSeat(existing, sessionCode);
         return;
       }
 
+      const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase
         .from('players')
         .insert([
           {
             game_id: game.id,
-            user_name: charData.name,
-            avatar_class: charData.characterClass,
-            stats: charData.stats,
+            user_name: sanitized.name,
+            avatar_class: sanitized.characterClass,
+            stats: sanitized.stats,
             current_hp: 15,
             max_hp: 15,
           },
@@ -494,18 +703,39 @@ export default function GameRoom({ params }: { params: { code: string } }) {
         .single();
 
       if (error) {
+        if (isUniqueViolation(error)) {
+          const raced = await resolveExistingSeat(game.id, sanitized.name, cached);
+          if (raced) {
+            adoptPlayerSeat(raced, sessionCode);
+            return;
+          }
+        }
         throw error;
       }
 
-      if (data) {
-        setCurrentPlayer(normalizePlayer(data as Record<string, unknown>));
+      const created = normalizePlayer(data as Record<string, unknown>);
+      if (!created) {
+        throw new Error('Player seat creation returned an invalid payload.');
       }
+
+      adoptPlayerSeat(created, sessionCode);
     } catch (error) {
       console.error('Character manifestation error:', error);
-      setBootError(
-        error instanceof Error
-          ? error.message
-          : 'Could not register character. That name may already be claimed at this table.'
+
+      // Keep the board usable with a local fallback seat if the write path collapses.
+      const fallbackSeat: PlayerEntity = {
+        id: `local-${Date.now()}`,
+        game_id: game.id,
+        user_name: sanitized.name,
+        avatar_class: sanitized.characterClass,
+        stats: sanitized.stats,
+        current_hp: 15,
+        max_hp: 15,
+        created_at: new Date().toISOString(),
+      };
+      adoptPlayerSeat(fallbackSeat, sessionCode);
+      setSyncNotice(
+        'Seat write failed — running on local fallback until sync recovers.'
       );
     } finally {
       setJoining(false);
@@ -513,75 +743,105 @@ export default function GameRoom({ params }: { params: { code: string } }) {
   };
 
   const handleExecuteAction = async () => {
-    if (!inputMessage.trim() || !currentPlayer || !game || isGMLoading) return;
+    if (!inputMessage.trim() || !currentPlayer?.user_name || !game?.id || isGMLoading) {
+      return;
+    }
 
     const userText = inputMessage.trim();
+    const senderName = currentPlayer.user_name;
+    const activeGameId = game.id;
+
     setInputMessage('');
     setIsGMLoading(true);
-    triggerDiceFromUser(currentPlayer.user_name);
+    triggerDiceFromUser(senderName);
+
+    const optimisticPlayerMsg = createOptimisticMessage(activeGameId, senderName, userText);
+    setMessages((prev) => mergeMessageLedger(prev, optimisticPlayerMsg));
 
     try {
       const supabase = getSupabaseBrowserClient();
 
-      const { error: playerMsgError } = await supabase.from('messages').insert([
-        {
-          game_id: game.id,
-          sender: currentPlayer.user_name,
-          content: userText,
-        },
-      ]);
-
-      if (playerMsgError) {
-        throw playerMsgError;
+      try {
+        const { error: playerMsgError } = await supabase.from('messages').insert([
+          {
+            game_id: activeGameId,
+            sender: senderName,
+            content: userText,
+          },
+        ]);
+        if (playerMsgError) {
+          throw playerMsgError;
+        }
+      } catch (writeError) {
+        console.error('Player message persist failure:', writeError);
+        setSyncNotice('Action kept locally — DB write delayed.');
       }
 
       const activeHistory = messages
-        .map((message) => ({ sender: message.sender, content: message.content }))
+        .concat(optimisticPlayerMsg)
+        .map((message) => ({
+          sender: message?.sender ?? 'Unknown',
+          content: message?.content ?? '',
+        }))
+        .filter((message) => message.content.length > 0)
         .slice(-10);
 
-      const res = await fetch('/api/gm-stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          playerInput: userText,
-          sender: currentPlayer.user_name,
-          gameId: game.id,
-          history: activeHistory,
-        }),
-      });
+      let gmReply = 'The simulation warped. Repeat your raw action.';
+      try {
+        const res = await fetch('/api/gm-stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            playerInput: userText,
+            sender: senderName,
+            gameId: activeGameId,
+            history: activeHistory,
+          }),
+        });
 
-      const data = (await res.json()) as { reply?: string };
-      const gmReply = data.reply || 'The simulation warped. Repeat your raw action.';
-
-      const { error: gmMsgError } = await supabase.from('messages').insert([
-        {
-          game_id: game.id,
-          sender: 'GM',
-          content: gmReply,
-        },
-      ]);
-
-      if (gmMsgError) {
-        throw gmMsgError;
+        const data = (await res.json()) as { reply?: string };
+        if (typeof data?.reply === 'string' && data.reply.trim()) {
+          gmReply = data.reply.trim();
+        }
+      } catch (apiError) {
+        console.error('GM API transport failure:', apiError);
+        gmReply = 'The matrix caught fire mid-turn. Spit that chaos at me again.';
       }
 
-      await supabase
-        .from('games')
-        .update({ current_narrative: gmReply })
-        .eq('id', game.id);
-    } catch (err) {
-      console.error('Core interaction submission error:', err);
+      const optimisticGmMsg = createOptimisticMessage(activeGameId, 'GM', gmReply);
+      setMessages((prev) => mergeMessageLedger(prev, optimisticGmMsg));
+      setGame((prev) =>
+        prev
+          ? {
+              ...prev,
+              current_narrative: gmReply,
+            }
+          : prev
+      );
+
       try {
-        const supabase = getSupabaseBrowserClient();
-        await supabase.from('messages').insert([
+        const { error: gmMsgError } = await supabase.from('messages').insert([
           {
-            game_id: game.id,
+            game_id: activeGameId,
             sender: 'GM',
-            content: 'The matrix caught fire mid-turn. Spit that chaos at me again.',
+            content: gmReply,
           },
         ]);
-      } catch (fallbackError) {
-        console.error('Fallback GM message failed:', fallbackError);
+        if (gmMsgError) {
+          throw gmMsgError;
+        }
+      } catch (gmWriteError) {
+        console.error('GM message persist failure:', gmWriteError);
+        setSyncNotice('GM reply held locally — persistence retry on heartbeat.');
+      }
+
+      try {
+        await supabase
+          .from('games')
+          .update({ current_narrative: gmReply })
+          .eq('id', activeGameId);
+      } catch (narrativeError) {
+        console.error('Narrative persist failure:', narrativeError);
       }
     } finally {
       setIsGMLoading(false);
@@ -589,31 +849,44 @@ export default function GameRoom({ params }: { params: { code: string } }) {
   };
 
   const recordPosition = useCallback((name: string, el: HTMLDivElement | null) => {
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    playerPositionsRef.current[name] = {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
-    };
+    if (!el || !name || typeof window === 'undefined') return;
+    try {
+      const rect = el.getBoundingClientRect();
+      playerPositionsRef.current[name] = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      };
+    } catch {
+      // Ignore measurement failures during transient unmounts.
+    }
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const refreshPositions = () => {
       Object.keys(playerPositionsRef.current).forEach((name) => {
-        const nodes = document.querySelectorAll(`[data-player-anchor="${CSS.escape(name)}"]`);
+        const escaped =
+          typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+            ? CSS.escape(name)
+            : name.replace(/["\\]/g, '\\$&');
+        const nodes = document.querySelectorAll(`[data-player-anchor="${escaped}"]`);
         const el = nodes[0] as HTMLDivElement | undefined;
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          playerPositionsRef.current[name] = {
-            x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2,
-          };
-        }
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        playerPositionsRef.current[name] = {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+        };
       });
     };
 
     window.addEventListener('resize', refreshPositions);
-    return () => window.removeEventListener('resize', refreshPositions);
+    window.visualViewport?.addEventListener('resize', refreshPositions);
+    return () => {
+      window.removeEventListener('resize', refreshPositions);
+      window.visualViewport?.removeEventListener('resize', refreshPositions);
+    };
   }, []);
 
   if (bootError) {
@@ -647,18 +920,27 @@ export default function GameRoom({ params }: { params: { code: string } }) {
     return <CharacterSetup onFinish={handleCharacterDone} />;
   }
 
+  const activeName = currentPlayer?.user_name ?? '';
   const adjacentPlayers = players.filter(
-    (player) => player.user_name !== currentPlayer.user_name
+    (player) => (player?.user_name ?? '') !== activeName
   );
   const leftParty = adjacentPlayers.slice(0, Math.ceil(adjacentPlayers.length / 2));
   const rightParty = adjacentPlayers.slice(Math.ceil(adjacentPlayers.length / 2));
+  const activeHp = safeHp(currentPlayer);
+  const narrative =
+    game?.current_narrative ?? 'The dynamic void initializes. Welcome, degenerates.';
+
+  const healthTone =
+    channelHealth === 'joined'
+      ? 'bg-emerald-400 shadow-[0_0_12px_#34d399]'
+      : channelHealth === 'connecting'
+        ? 'bg-amber-400 shadow-[0_0_12px_#fbbf24] animate-pulse'
+        : 'bg-red-400 shadow-[0_0_12px_#f87171] animate-pulse';
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col overflow-hidden antialiased select-none relative">
-      {/* Dynamic Simulation Overlay Layer */}
       <canvas ref={canvasRef} className="absolute inset-0 z-40 pointer-events-none" />
 
-      {/* Panoramic Curated Tabletop Scene Backdrop */}
       <div
         className="absolute inset-0 bg-cover bg-center -z-20 opacity-25 ken-burns"
         style={{ backgroundImage: `url(${assetLibrary.boardArt})` }}
@@ -669,13 +951,13 @@ export default function GameRoom({ params }: { params: { code: string } }) {
 
       <header className="relative z-20 border-b border-white/10 bg-neutral-950/55 backdrop-blur-2xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-[0_0_15px_#a855f7] animate-pulse shrink-0" />
+          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${healthTone}`} />
           <div className="min-w-0">
             <h1 className="font-display text-sm font-black tracking-widest uppercase bg-gradient-to-r from-purple-400 via-pink-400 to-red-500 bg-clip-text text-transparent truncate">
               Voidline Tactical Board
             </h1>
             <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-              Session {sessionCode}
+              Session {sessionCode} · sync {channelHealth}
             </p>
           </div>
         </div>
@@ -692,8 +974,13 @@ export default function GameRoom({ params }: { params: { code: string } }) {
         </button>
       </header>
 
+      {syncNotice && (
+        <div className="relative z-30 px-4 py-2 text-[10px] font-mono uppercase tracking-widest text-amber-200 bg-amber-950/50 border-b border-amber-500/20">
+          {syncNotice}
+        </div>
+      )}
+
       <main className="relative z-10 flex-1 grid grid-cols-12 gap-3 sm:gap-4 p-3 sm:p-4 h-[calc(100vh-61px)] max-h-[calc(100vh-61px)] overflow-hidden">
-        {/* Left Flank Combatants */}
         <section className="col-span-12 sm:col-span-2 flex sm:flex-col justify-center gap-3 z-10 order-2 sm:order-1 overflow-x-auto sm:overflow-y-auto custom-scrollbar">
           {leftParty.length === 0 ? (
             <div className="hidden sm:block text-[10px] font-mono uppercase tracking-widest text-neutral-600 border border-dashed border-white/10 rounded-2xl p-4 text-center">
@@ -708,9 +995,7 @@ export default function GameRoom({ params }: { params: { code: string } }) {
           )}
         </section>
 
-        {/* Center Lane: GM Head + Active Operative + Narrative Terminal */}
         <section className="col-span-12 sm:col-span-8 flex flex-col gap-3 min-h-0 z-10 order-1 sm:order-2">
-          {/* Imposing Game Master Avatar Card */}
           <div
             className={`mx-auto w-full max-w-md rounded-3xl border border-purple-400/40 bg-black/55 backdrop-blur-xl shadow-[0_0_50px_rgba(168,85,247,0.25)] overflow-hidden animate-float ${
               isGMLoading ? 'gm-breathe' : ''
@@ -735,18 +1020,15 @@ export default function GameRoom({ params }: { params: { code: string } }) {
                   Void Arbiter
                 </h2>
                 <p className="text-[11px] text-neutral-400 line-clamp-2 mt-1">
-                  {isGMLoading
-                    ? 'Weaving chaos across the board...'
-                    : game.current_narrative}
+                  {isGMLoading ? 'Weaving chaos across the board...' : narrative}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Active user centered on the board */}
           <div
             className="mx-auto w-full max-w-sm"
-            data-player-anchor={currentPlayer.user_name}
+            data-player-anchor={currentPlayer?.user_name ?? 'self'}
           >
             <PlayerBoardCard
               player={currentPlayer}
@@ -755,7 +1037,6 @@ export default function GameRoom({ params }: { params: { code: string } }) {
             />
           </div>
 
-          {/* Narrative Continuum Terminal */}
           <div className="flex-1 min-h-0 rounded-3xl border border-white/10 bg-neutral-950/45 backdrop-blur-2xl shadow-[0_30px_80px_rgba(0,0,0,0.65)] overflow-hidden flex flex-col relative">
             <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/35 to-transparent pointer-events-none z-[1]" />
             <div className="relative z-[2] border-b border-white/5 px-4 py-2.5 flex items-center justify-between bg-black/25">
@@ -777,11 +1058,11 @@ export default function GameRoom({ params }: { params: { code: string } }) {
               )}
 
               {messages.map((message) => {
-                const isGm = message.sender === 'GM';
-                const isSelf = message.sender === currentPlayer.user_name;
+                const isGm = message?.sender === 'GM';
+                const isSelf = message?.sender === currentPlayer?.user_name;
                 return (
                   <div
-                    key={message.id}
+                    key={`${message.id}-${message.created_at}`}
                     className={`max-w-2xl rounded-2xl border px-3.5 py-2.5 backdrop-blur-md ${
                       isGm
                         ? 'border-purple-500/30 bg-purple-950/30'
@@ -796,14 +1077,16 @@ export default function GameRoom({ params }: { params: { code: string } }) {
                           isGm ? 'text-purple-300' : 'text-neutral-400'
                         }`}
                       >
-                        {message.sender}
+                        {message?.sender ?? 'Unknown'}
                       </span>
                       <span className="text-[10px] font-mono text-neutral-600">
-                        {new Date(message.created_at).toLocaleTimeString()}
+                        {message?.created_at
+                          ? new Date(message.created_at).toLocaleTimeString()
+                          : '--'}
                       </span>
                     </div>
                     <p className="text-sm text-neutral-100 whitespace-pre-wrap leading-relaxed">
-                      {message.content}
+                      {message?.content ?? ''}
                     </p>
                   </div>
                 );
@@ -848,7 +1131,6 @@ export default function GameRoom({ params }: { params: { code: string } }) {
           </div>
         </section>
 
-        {/* Right Flank Combatants */}
         <section className="col-span-12 sm:col-span-2 flex sm:flex-col justify-center gap-3 z-10 order-3 overflow-x-auto sm:overflow-y-auto custom-scrollbar">
           {rightParty.length === 0 ? (
             <div className="hidden sm:block text-[10px] font-mono uppercase tracking-widest text-neutral-600 border border-dashed border-white/10 rounded-2xl p-4 text-center">
@@ -864,7 +1146,6 @@ export default function GameRoom({ params }: { params: { code: string } }) {
         </section>
       </main>
 
-      {/* Arsenal tray retained for equipment art */}
       <aside
         className={`fixed top-[61px] right-0 bottom-0 w-full sm:w-[360px] z-50 transform transition-transform duration-500 ease-out border-l border-white/10 bg-neutral-950/90 backdrop-blur-2xl ${
           isTrayOpen ? 'translate-x-0' : 'translate-x-full'
@@ -877,8 +1158,12 @@ export default function GameRoom({ params }: { params: { code: string } }) {
                 Character Arsenal
               </p>
               <h2 className="font-display text-lg font-black tracking-wide text-neutral-50">
-                {currentPlayer.user_name}
+                {currentPlayer?.user_name ?? 'Operative'}
               </h2>
+              <p className="text-[10px] font-mono text-neutral-500 mt-1 uppercase tracking-wider">
+                HP {activeHp.current}/{activeHp.max} · STR {safeStat(currentPlayer, 'STR')} · DEX{' '}
+                {safeStat(currentPlayer, 'DEX')} · CHA {safeStat(currentPlayer, 'CHA')}
+              </p>
             </div>
             <button
               type="button"
@@ -888,6 +1173,27 @@ export default function GameRoom({ params }: { params: { code: string } }) {
               Close
             </button>
           </div>
+
+          <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono uppercase tracking-wider text-neutral-400 border border-white/10 rounded-2xl p-3 bg-black/30">
+            {(
+              Object.keys(currentPlayer?.stats ?? {
+                STR: 10,
+                DEX: 10,
+                CON: 10,
+                INT: 10,
+                WIS: 10,
+                CHA: 10,
+              }) as Array<keyof AbilityScores>
+            ).map((stat) => (
+              <div key={stat} className="py-1">
+                <div className="text-neutral-500">{stat}</div>
+                <div className="text-neutral-100 font-black text-sm">
+                  {safeStat(currentPlayer, stat)}
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="grid grid-cols-3 gap-3">
             {inventorySlots.map((slot) => (
               <div
