@@ -4,6 +4,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import CharacterSetup from '@/components/CharacterSetup';
+import TokenPiece from '@/components/tabletop/TokenPiece';
+import {
+  BOARD_TEXTURE,
+  GM_PORTRAIT,
+  INVENTORY_SLOTS,
+  MAP_SCENE,
+  portraitForPlayer,
+} from '@/lib/game-art';
 import {
   createOptimisticMessage,
   isUniqueViolation,
@@ -35,32 +43,7 @@ import type {
   ThreadMessage,
 } from '@/types/database';
 
-const ICON_BASE = 'https://raw.githubusercontent.com/game-icons/icons/master';
 const HEARTBEAT_MS = 12_000;
-
-const assetLibrary = {
-  boardArt:
-    'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2400&q=80',
-  gmAvatar:
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=80',
-  playerAvatar:
-    'https://images.unsplash.com/photo-1460194436988-671f763436b7?auto=format&fit=crop&w=800&q=80',
-  mainWeapon: `${ICON_BASE}/lorc/broadsword.svg`,
-  shield: `${ICON_BASE}/lorc/checked-shield.svg`,
-  armor: `${ICON_BASE}/lorc/breastplate.svg`,
-  cloak: `${ICON_BASE}/lorc/robe.svg`,
-  ring: `${ICON_BASE}/delapouite/ring.svg`,
-  amulet: `${ICON_BASE}/lorc/gem-pendant.svg`,
-} as const;
-
-const inventorySlots = [
-  { id: 'mainWeapon', label: 'Main Weapon', src: assetLibrary.mainWeapon },
-  { id: 'shield', label: 'Shield', src: assetLibrary.shield },
-  { id: 'armor', label: 'Gothic Chest Plate', src: assetLibrary.armor },
-  { id: 'cloak', label: 'Cloak', src: assetLibrary.cloak },
-  { id: 'ring', label: 'Enchanted Ring', src: assetLibrary.ring },
-  { id: 'amulet', label: 'Enchanted Jewel', src: assetLibrary.amulet },
-] as const;
 
 interface DiceParticle {
   id: number;
@@ -73,67 +56,6 @@ interface DiceParticle {
   size: number;
   alpha: number;
   value: number;
-}
-
-function PlayerBoardCard({
-  player,
-  emphasized,
-  onMount,
-}: {
-  player: PlayerEntity;
-  emphasized?: boolean;
-  onMount: (name: string, el: HTMLDivElement | null) => void;
-}) {
-  const hp = safeHp(player);
-  const cha = safeStat(player, 'CHA');
-
-  return (
-    <div
-      ref={(el) => onMount(player?.user_name ?? 'unknown', el)}
-      className={`relative overflow-hidden rounded-2xl border backdrop-blur-md shadow-2xl transition-all duration-300 ${
-        emphasized
-          ? 'border-purple-400/60 bg-purple-950/40 shadow-[0_0_40px_rgba(168,85,247,0.35)] scale-105'
-          : 'border-white/10 bg-black/60 hover:border-purple-500/40'
-      }`}
-    >
-      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(168,85,247,0.12),transparent_45%)] pointer-events-none" />
-      <div className="relative p-3 sm:p-4 space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-white/15 shrink-0">
-            <Image
-              src={assetLibrary.playerAvatar}
-              alt=""
-              fill
-              sizes="48px"
-              className="object-cover"
-            />
-          </div>
-          <div className="min-w-0">
-            <h4 className="font-black text-xs sm:text-sm text-neutral-100 truncate tracking-wide">
-              {player?.user_name ?? 'Unknown'}
-            </h4>
-            <p className="text-[9px] font-mono uppercase tracking-widest text-purple-300 truncate">
-              {player?.avatar_class ?? 'Adventurer'}
-            </p>
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <div className="flex justify-between text-[10px] font-mono uppercase tracking-wider text-neutral-400">
-            <span>
-              {hp.current}/{hp.max} HP
-            </span>
-            <span>CHA {cha}</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-black/70 overflow-hidden border border-white/5">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-red-600 via-pink-500 to-purple-500"
-              style={{ width: `${hp.ratio * 100}%` }}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function GameRoom({ params }: { params: { code: string } }) {
@@ -565,12 +487,12 @@ export default function GameRoom({ params }: { params: { code: string } }) {
       c.closePath();
 
       const gradient = c.createLinearGradient(-size, -size, size, size);
-      gradient.addColorStop(0, 'rgba(88, 28, 135, 0.95)');
-      gradient.addColorStop(0.5, 'rgba(15, 11, 28, 0.95)');
-      gradient.addColorStop(1, 'rgba(236, 72, 153, 0.55)');
+      gradient.addColorStop(0, 'rgba(180, 83, 9, 0.95)');
+      gradient.addColorStop(0.45, 'rgba(40, 24, 16, 0.96)');
+      gradient.addColorStop(1, 'rgba(159, 18, 57, 0.75)');
       c.fillStyle = gradient;
       c.fill();
-      c.strokeStyle = '#c084fc';
+      c.strokeStyle = '#e8d5a8';
       c.lineWidth = 2;
       c.stroke();
 
@@ -580,12 +502,12 @@ export default function GameRoom({ params }: { params: { code: string } }) {
         c.moveTo(0, 0);
         c.lineTo(Math.cos(angle) * size, Math.sin(angle) * size);
       }
-      c.strokeStyle = 'rgba(244, 114, 182, 0.75)';
+      c.strokeStyle = 'rgba(245, 158, 11, 0.8)';
       c.lineWidth = 1;
       c.stroke();
 
       c.rotate(-rot);
-      c.fillStyle = '#f5f3ff';
+      c.fillStyle = '#fdf6e3';
       c.font = `bold ${Math.max(10, size * 0.7)}px "IBM Plex Mono", monospace`;
       c.textAlign = 'center';
       c.textBaseline = 'middle';
@@ -891,17 +813,14 @@ export default function GameRoom({ params }: { params: { code: string } }) {
 
   if (bootError) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
-        <div className="max-w-md w-full border border-red-900/60 bg-neutral-900/80 rounded-2xl p-6 space-y-3 backdrop-blur-xl">
-          <h1 className="font-display text-sm font-black uppercase tracking-widest text-red-300">
-            Lobby Calibration Failed
+      <div className="min-h-screen tabletop-shell flex items-center justify-center p-6">
+        <div className="parchment-panel max-w-md w-full p-6 space-y-3">
+          <h1 className="font-display text-lg font-black tracking-wide text-[#7f1d1d]">
+            The Table Rejects This Seal
           </h1>
-          <p className="text-xs font-mono text-neutral-400 whitespace-pre-wrap">{bootError}</p>
-          <a
-            href="/"
-            className="inline-block text-[10px] uppercase tracking-widest text-purple-400 hover:text-purple-300"
-          >
-            ← Return to Entryway
+          <p className="text-sm whitespace-pre-wrap">{bootError}</p>
+          <a href="/" className="inline-block font-display text-xs uppercase tracking-widest text-[#b45309]">
+            ← Return to the Void Gate
           </a>
         </div>
       </div>
@@ -910,8 +829,8 @@ export default function GameRoom({ params }: { params: { code: string } }) {
 
   if (!game) {
     return (
-      <div className="min-h-screen bg-black text-purple-500 flex items-center justify-center font-mono text-xs tracking-widest animate-pulse">
-        BOOTING MATRIX BOARD...
+      <div className="min-h-screen tabletop-shell flex items-center justify-center font-display text-sm tracking-[0.35em] uppercase text-[#c4a574] animate-pulse">
+        Unfurling the campaign board…
       </div>
     );
   }
@@ -929,289 +848,257 @@ export default function GameRoom({ params }: { params: { code: string } }) {
   const activeHp = safeHp(currentPlayer);
   const narrative =
     game?.current_narrative ?? 'The dynamic void initializes. Welcome, degenerates.';
-
-  const healthTone =
-    channelHealth === 'joined'
-      ? 'bg-emerald-400 shadow-[0_0_12px_#34d399]'
-      : channelHealth === 'connecting'
-        ? 'bg-amber-400 shadow-[0_0_12px_#fbbf24] animate-pulse'
-        : 'bg-red-400 shadow-[0_0_12px_#f87171] animate-pulse';
+  const selfPortrait = portraitForPlayer(
+    currentPlayer?.user_name,
+    currentPlayer?.avatar_class
+  );
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col overflow-hidden antialiased select-none relative">
-      <canvas ref={canvasRef} className="absolute inset-0 z-40 pointer-events-none" />
+    <div className="min-h-screen tabletop-shell overflow-hidden antialiased select-none relative text-[#f3e6c8]">
+      <canvas ref={canvasRef} className="absolute inset-0 z-50 pointer-events-none" />
 
+      {/* Full-bleed table wood */}
       <div
-        className="absolute inset-0 bg-cover bg-center -z-20 opacity-25 ken-burns"
-        style={{ backgroundImage: `url(${assetLibrary.boardArt})` }}
+        className="absolute inset-0 bg-cover bg-center ken-burns opacity-90"
+        style={{ backgroundImage: `url(${BOARD_TEXTURE})` }}
         aria-hidden
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/55 to-transparent -z-10" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_10%,rgba(10,10,10,0.85)_75%,#0a0a0a_100%)] -z-10" />
+      <div className="absolute inset-0 bg-[#140e0a]/70" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#140e0a] via-transparent to-[#140e0a]/80" />
+      <div className="absolute left-8 top-24 w-40 h-40 torch-glow" />
+      <div className="absolute right-10 bottom-40 w-48 h-48 torch-glow" />
 
-      <header className="relative z-20 border-b border-white/10 bg-neutral-950/55 backdrop-blur-2xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${healthTone}`} />
-          <div className="min-w-0">
-            <h1 className="font-display text-sm font-black tracking-widest uppercase bg-gradient-to-r from-purple-400 via-pink-400 to-red-500 bg-clip-text text-transparent truncate">
-              Voidline Tactical Board
-            </h1>
-            <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-              Session {sessionCode} · sync {channelHealth}
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setIsTrayOpen((open) => !open)}
-          className={`px-4 py-2 text-[10px] font-mono font-bold tracking-widest uppercase rounded-xl border transition-all ${
-            isTrayOpen
-              ? 'bg-gradient-to-r from-purple-600 to-pink-600 border-purple-400 text-white'
-              : 'bg-neutral-900/80 border-white/10 text-neutral-300 hover:border-purple-500/50'
-          }`}
-        >
-          Arsenal
-        </button>
-      </header>
+      {/* Etched session seal — no SaaS header */}
+      <div className="absolute top-4 left-4 z-30 session-seal text-[10px] sm:text-xs">
+        SEAL {sessionCode}
+      </div>
+      <button
+        type="button"
+        onClick={() => setIsTrayOpen((open) => !open)}
+        className="absolute top-3 right-4 z-30 wax-button px-4 py-2 text-[10px] uppercase tracking-[0.25em]"
+      >
+        Satchel
+      </button>
 
       {syncNotice && (
-        <div className="relative z-30 px-4 py-2 text-[10px] font-mono uppercase tracking-widest text-amber-200 bg-amber-950/50 border-b border-amber-500/20">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 parchment-panel px-4 py-1.5 text-[11px] max-w-[90vw]">
           {syncNotice}
         </div>
       )}
 
-      <main className="relative z-10 flex-1 grid grid-cols-12 gap-3 sm:gap-4 p-3 sm:p-4 h-[calc(100vh-61px)] max-h-[calc(100vh-61px)] overflow-hidden">
-        <section className="col-span-12 sm:col-span-2 flex sm:flex-col justify-center gap-3 z-10 order-2 sm:order-1 overflow-x-auto sm:overflow-y-auto custom-scrollbar">
-          {leftParty.length === 0 ? (
-            <div className="hidden sm:block text-[10px] font-mono uppercase tracking-widest text-neutral-600 border border-dashed border-white/10 rounded-2xl p-4 text-center">
-              Left flank open
-            </div>
-          ) : (
-            leftParty.map((player) => (
-              <div key={player.id} data-player-anchor={player.user_name}>
-                <PlayerBoardCard player={player} onMount={recordPosition} />
-              </div>
-            ))
-          )}
-        </section>
-
-        <section className="col-span-12 sm:col-span-8 flex flex-col gap-3 min-h-0 z-10 order-1 sm:order-2">
+      <div className="relative z-10 h-screen max-h-screen grid grid-rows-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-3 p-3 sm:p-5">
+        {/* TOKEN MAP */}
+        <section className="board-frame relative rounded-sm overflow-hidden min-h-0">
           <div
-            className={`mx-auto w-full max-w-md rounded-3xl border border-purple-400/40 bg-black/55 backdrop-blur-xl shadow-[0_0_50px_rgba(168,85,247,0.25)] overflow-hidden animate-float ${
+            className="absolute inset-0 bg-cover bg-center opacity-50"
+            style={{ backgroundImage: `url(${MAP_SCENE})` }}
+            aria-hidden
+          />
+          <div className="absolute inset-0 map-grid opacity-80" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
+
+          {/* DM Screen / GM head of map */}
+          <div
+            className={`absolute top-3 left-1/2 -translate-x-1/2 z-20 w-[min(92%,28rem)] dm-screen rounded-sm p-3 flex items-center gap-3 animate-float ${
               isGMLoading ? 'gm-breathe' : ''
             }`}
           >
-            <div className="flex items-center gap-4 p-4">
-              <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border border-purple-300/40 shrink-0 shadow-[0_0_24px_rgba(236,72,153,0.35)]">
-                <Image
-                  src={assetLibrary.gmAvatar}
-                  alt="Game Master"
-                  fill
-                  sizes="80px"
-                  className="object-cover"
-                  priority
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-purple-300">
-                  Game Master
-                </p>
-                <h2 className="font-display text-lg sm:text-xl font-black tracking-wide text-neutral-50">
-                  Void Arbiter
-                </h2>
-                <p className="text-[11px] text-neutral-400 line-clamp-2 mt-1">
-                  {isGMLoading ? 'Weaving chaos across the board...' : narrative}
-                </p>
-              </div>
+            <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 overflow-hidden border-2 border-[#c4a574]">
+              <Image src={GM_PORTRAIT} alt="Game Master" fill sizes="80px" className="object-cover" priority />
             </div>
-          </div>
-
-          <div
-            className="mx-auto w-full max-w-sm"
-            data-player-anchor={currentPlayer?.user_name ?? 'self'}
-          >
-            <PlayerBoardCard
-              player={currentPlayer}
-              emphasized
-              onMount={recordPosition}
-            />
-          </div>
-
-          <div className="flex-1 min-h-0 rounded-3xl border border-white/10 bg-neutral-950/45 backdrop-blur-2xl shadow-[0_30px_80px_rgba(0,0,0,0.65)] overflow-hidden flex flex-col relative">
-            <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/35 to-transparent pointer-events-none z-[1]" />
-            <div className="relative z-[2] border-b border-white/5 px-4 py-2.5 flex items-center justify-between bg-black/25">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-                Narrative Continuum
+            <div className="min-w-0">
+              <p className="font-display text-[10px] uppercase tracking-[0.35em] text-[#c4a574]">
+                Dungeon Master
               </p>
-              {isGMLoading && (
-                <span className="text-[10px] font-mono uppercase tracking-widest text-purple-300 animate-pulse">
-                  Dice in flight...
-                </span>
-              )}
+              <h2 className="font-display text-lg sm:text-xl font-black text-[#f3e6c8]">
+                Void Arbiter
+              </h2>
+              <p className="text-[12px] text-[#d6c4a1] line-clamp-2 italic leading-snug mt-0.5">
+                {isGMLoading ? 'The Arbiter leans in… dice rattle in the dark.' : narrative}
+              </p>
+            </div>
+          </div>
+
+          {/* Tokens on the board */}
+          <div className="absolute inset-0 z-10 flex items-end sm:items-center justify-between px-2 sm:px-8 pb-6 sm:pb-10 pt-28">
+            <div className="flex flex-col gap-4 items-center justify-center min-w-[4.5rem]">
+              {leftParty.map((player) => (
+                <div key={player.id} data-player-anchor={player.user_name}>
+                  <TokenPiece player={player} onMount={recordPosition} size="sm" />
+                </div>
+              ))}
             </div>
 
-            <div className="relative z-[2] flex-1 overflow-y-auto px-4 py-3 space-y-2.5 custom-scrollbar">
-              {messages.length === 0 && (
-                <div className="text-xs font-mono text-neutral-500 border border-dashed border-white/10 rounded-2xl p-4 bg-black/20">
-                  The tactical grid is quiet. Execute an action to hurl d20s across the board.
-                </div>
-              )}
+            <div
+              className="flex flex-col items-center gap-2"
+              data-player-anchor={currentPlayer?.user_name ?? 'self'}
+            >
+              <TokenPiece
+                player={currentPlayer}
+                emphasized
+                onMount={recordPosition}
+                size="lg"
+              />
+              <p className="font-display text-[10px] uppercase tracking-[0.3em] text-[#f59e0b]">
+                Your token
+              </p>
+            </div>
 
-              {messages.map((message) => {
-                const isGm = message?.sender === 'GM';
-                const isSelf = message?.sender === currentPlayer?.user_name;
-                return (
-                  <div
-                    key={`${message.id}-${message.created_at}`}
-                    className={`max-w-2xl rounded-2xl border px-3.5 py-2.5 backdrop-blur-md ${
-                      isGm
-                        ? 'border-purple-500/30 bg-purple-950/30'
-                        : isSelf
-                          ? 'border-white/15 bg-neutral-900/70 ml-auto'
-                          : 'border-white/10 bg-black/35'
+            <div className="flex flex-col gap-4 items-center justify-center min-w-[4.5rem]">
+              {rightParty.map((player) => (
+                <div key={player.id} data-player-anchor={player.user_name}>
+                  <TokenPiece player={player} onMount={recordPosition} size="sm" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* PARCHMENT CHRONICLE */}
+        <section className="parchment-panel min-h-0 rounded-sm flex flex-col overflow-hidden">
+          <div className="px-4 py-2 border-b border-[#8b5e34]/60 flex items-center justify-between">
+            <h3 className="font-display text-sm font-bold tracking-wide text-[#2c1810]">
+              Campaign Chronicle
+            </h3>
+            {isGMLoading && (
+              <span className="text-[11px] italic text-[#7f1d1d]">Ink still wet…</span>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-3 space-y-3">
+            {messages.length === 0 && (
+              <p className="text-sm italic text-[#5c3a21]">
+                The page is blank. Speak an action and the Arbiter will write fate.
+              </p>
+            )}
+            {messages.map((message) => {
+              const isGm = message?.sender === 'GM';
+              return (
+                <div key={`${message.id}-${message.created_at}`} className="ink-line">
+                  <p
+                    className={`font-display text-[11px] uppercase tracking-[0.2em] ${
+                      isGm ? 'text-[#9f1239]' : 'text-[#5c3a21]'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3 mb-1">
-                      <span
-                        className={`text-[10px] font-mono uppercase tracking-widest ${
-                          isGm ? 'text-purple-300' : 'text-neutral-400'
-                        }`}
-                      >
-                        {message?.sender ?? 'Unknown'}
-                      </span>
-                      <span className="text-[10px] font-mono text-neutral-600">
-                        {message?.created_at
-                          ? new Date(message.created_at).toLocaleTimeString()
-                          : '--'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-neutral-100 whitespace-pre-wrap leading-relaxed">
-                      {message?.content ?? ''}
-                    </p>
-                  </div>
-                );
-              })}
-              <div ref={terminalEndRef} />
-            </div>
-
-            <form
-              className="relative z-[2] border-t border-white/10 p-3 sm:p-4 bg-black/40 space-y-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleExecuteAction();
-              }}
-            >
-              <textarea
-                value={inputMessage}
-                onChange={(event) => setInputMessage(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    void handleExecuteAction();
-                  }
-                }}
-                rows={2}
-                placeholder="Declare your action — dice will erupt from your board card..."
-                className="w-full resize-none bg-neutral-950/80 border border-white/10 focus:border-purple-500 rounded-2xl px-4 py-3 text-sm text-neutral-100 focus:outline-none transition-all"
-                disabled={isGMLoading}
-              />
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] font-mono text-neutral-600 uppercase tracking-wider">
-                  Enter to throw · Shift+Enter newline
-                </p>
-                <button
-                  type="submit"
-                  disabled={!inputMessage.trim() || isGMLoading}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-40 text-white font-bold uppercase tracking-wider text-xs px-5 py-2.5 rounded-xl transition-all border border-purple-400/30 shadow-[0_0_24px_rgba(168,85,247,0.35)]"
-                >
-                  {isGMLoading ? 'Resolving...' : 'Execute & Throw'}
-                </button>
-              </div>
-            </form>
+                    {message?.sender ?? 'Unknown'}
+                  </p>
+                  <p className="text-[15px] leading-relaxed text-[#2c1810] whitespace-pre-wrap">
+                    {message?.content ?? ''}
+                  </p>
+                </div>
+              );
+            })}
+            <div ref={terminalEndRef} />
           </div>
-        </section>
 
-        <section className="col-span-12 sm:col-span-2 flex sm:flex-col justify-center gap-3 z-10 order-3 overflow-x-auto sm:overflow-y-auto custom-scrollbar">
-          {rightParty.length === 0 ? (
-            <div className="hidden sm:block text-[10px] font-mono uppercase tracking-widest text-neutral-600 border border-dashed border-white/10 rounded-2xl p-4 text-center">
-              Right flank open
+          <form
+            className="border-t border-[#8b5e34]/60 px-4 py-3 space-y-2 bg-[#dfc4a0]/40"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleExecuteAction();
+            }}
+          >
+            <textarea
+              value={inputMessage}
+              onChange={(event) => setInputMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void handleExecuteAction();
+                }
+              }}
+              rows={2}
+              placeholder="Dip the quill — declare your deed…"
+              className="quill-input w-full text-[15px] px-1 py-2"
+              disabled={isGMLoading}
+            />
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] italic text-[#5c3a21]">
+                Enter seals the deed · Shift+Enter new line
+              </p>
+              <button
+                type="submit"
+                disabled={!inputMessage.trim() || isGMLoading}
+                className="wax-button px-5 py-2 text-[11px] uppercase tracking-[0.2em]"
+              >
+                {isGMLoading ? 'Casting…' : 'Seal & Throw'}
+              </button>
             </div>
-          ) : (
-            rightParty.map((player) => (
-              <div key={player.id} data-player-anchor={player.user_name}>
-                <PlayerBoardCard player={player} onMount={recordPosition} />
-              </div>
-            ))
-          )}
+          </form>
         </section>
-      </main>
+      </div>
 
+      {/* Leather satchel / character sheet */}
       <aside
-        className={`fixed top-[61px] right-0 bottom-0 w-full sm:w-[360px] z-50 transform transition-transform duration-500 ease-out border-l border-white/10 bg-neutral-950/90 backdrop-blur-2xl ${
+        className={`fixed inset-y-0 right-0 w-full sm:w-[380px] z-[60] transform transition-transform duration-500 ease-out parchment-panel border-l-4 border-[#5c3a21] ${
           isTrayOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         <div className="h-full overflow-y-auto custom-scrollbar p-5 space-y-5">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-                Character Arsenal
-              </p>
-              <h2 className="font-display text-lg font-black tracking-wide text-neutral-50">
-                {currentPlayer?.user_name ?? 'Operative'}
-              </h2>
-              <p className="text-[10px] font-mono text-neutral-500 mt-1 uppercase tracking-wider">
-                HP {activeHp.current}/{activeHp.max} · STR {safeStat(currentPlayer, 'STR')} · DEX{' '}
-                {safeStat(currentPlayer, 'DEX')} · CHA {safeStat(currentPlayer, 'CHA')}
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="relative w-16 h-16 rounded-full overflow-hidden token-ring shrink-0">
+                <Image src={selfPortrait} alt="" fill sizes="64px" className="object-cover" />
+              </div>
+              <div>
+                <h2 className="font-display text-xl font-black text-[#2c1810]">
+                  {currentPlayer?.user_name ?? 'Wanderer'}
+                </h2>
+                <p className="text-[11px] uppercase tracking-[0.25em] text-[#5c3a21]">
+                  {currentPlayer?.avatar_class ?? 'Adventurer'}
+                </p>
+                <p className="text-[12px] text-[#7f1d1d] mt-1">
+                  Vitality {activeHp.current}/{activeHp.max}
+                </p>
+              </div>
             </div>
             <button
               type="button"
               onClick={() => setIsTrayOpen(false)}
-              className="text-[10px] font-mono uppercase tracking-widest px-3 py-2 rounded-xl border border-white/10 text-neutral-400 hover:text-white"
+              className="font-display text-[10px] uppercase tracking-widest text-[#5c3a21] border border-[#8b5e34] px-3 py-2"
             >
               Close
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono uppercase tracking-wider text-neutral-400 border border-white/10 rounded-2xl p-3 bg-black/30">
+          <div className="grid grid-cols-3 gap-2 text-center border border-[#8b5e34] p-3 bg-[#dfc4a0]/40">
             {(
-              Object.keys(currentPlayer?.stats ?? {
-                STR: 10,
-                DEX: 10,
-                CON: 10,
-                INT: 10,
-                WIS: 10,
-                CHA: 10,
-              }) as Array<keyof AbilityScores>
+              ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as Array<keyof AbilityScores>
             ).map((stat) => (
-              <div key={stat} className="py-1">
-                <div className="text-neutral-500">{stat}</div>
-                <div className="text-neutral-100 font-black text-sm">
+              <div key={stat}>
+                <div className="font-display text-[10px] tracking-widest text-[#5c3a21]">
+                  {stat}
+                </div>
+                <div className="font-display text-lg font-black text-[#2c1810]">
                   {safeStat(currentPlayer, stat)}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            {inventorySlots.map((slot) => (
-              <div
-                key={slot.id}
-                className="inventory-socket aspect-square rounded-2xl border border-white/10 bg-black/50 flex items-center justify-center p-4 transition-all duration-300 hover:border-purple-400/70 hover:shadow-[0_0_30px_rgba(168,85,247,0.45)]"
-                title={slot.label}
-                aria-label={slot.label}
-              >
-                <Image
-                  src={slot.src}
-                  alt=""
-                  width={72}
-                  height={72}
-                  unoptimized
-                  className="inventory-glyph w-full h-full object-contain opacity-30 transition-all duration-300"
-                />
-              </div>
-            ))}
+          <div>
+            <p className="font-display text-xs uppercase tracking-[0.25em] text-[#5c3a21] mb-3">
+              Reliquary
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {INVENTORY_SLOTS.map((slot) => (
+                <div
+                  key={slot.id}
+                  className="inventory-socket aspect-square border-2 border-[#8b5e34] bg-[#2c1810]/10 flex items-center justify-center p-3"
+                  title={slot.label}
+                  aria-label={slot.label}
+                >
+                  <Image
+                    src={slot.src}
+                    alt=""
+                    width={72}
+                    height={72}
+                    unoptimized
+                    className="inventory-glyph w-full h-full object-contain opacity-35 transition-all duration-300"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </aside>
@@ -1219,8 +1106,8 @@ export default function GameRoom({ params }: { params: { code: string } }) {
       {isTrayOpen && (
         <button
           type="button"
-          aria-label="Close arsenal tray"
-          className="fixed inset-0 top-[61px] bg-black/35 z-40"
+          aria-label="Close satchel"
+          className="fixed inset-0 bg-black/50 z-[55]"
           onClick={() => setIsTrayOpen(false)}
         />
       )}

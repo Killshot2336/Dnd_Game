@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
+import { portraitForPlayer } from '@/lib/game-art';
 import type { AbilityScores, CharacterPayload } from '@/types/database';
 
 interface CharacterSetupProps {
@@ -40,16 +42,30 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
     });
   };
 
-  return (
-    <div className="fixed inset-0 bg-neutral-950/95 backdrop-blur-xl z-50 flex items-center justify-center p-4 select-none">
-      <div className="bg-neutral-900 border border-neutral-800 p-8 rounded-2xl max-w-md w-full shadow-2xl space-y-6 relative">
-        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-purple-500 via-pink-500 to-red-500" />
+  const preview = portraitForPlayer(identity || 'Wanderer', vocation);
 
-        <div>
-          <h2 className="font-display text-lg font-black uppercase tracking-wider text-neutral-200">
-            Assemble Your Character
-          </h2>
-          <p className="text-xs text-neutral-500 font-mono">Configuration Module: Stage {stage}/2</p>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 tabletop-shell">
+      <div
+        className="absolute inset-0 bg-cover bg-center opacity-40"
+        style={{
+          backgroundImage:
+            'url(https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2400&q=80)',
+        }}
+      />
+      <div className="absolute inset-0 bg-[#140e0a]/75" />
+
+      <div className="parchment-panel relative max-w-md w-full p-6 sm:p-8 space-y-5">
+        <div className="flex items-center gap-4">
+          <div className="relative w-16 h-16 rounded-full overflow-hidden token-ring shrink-0">
+            <Image src={preview} alt="" fill sizes="64px" className="object-cover" />
+          </div>
+          <div>
+            <h2 className="font-display text-xl font-black text-[#2c1810]">Forge Your Legend</h2>
+            <p className="text-xs uppercase tracking-[0.25em] text-[#5c3a21]">
+              Ritual stage {stage}/2
+            </p>
+          </div>
         </div>
 
         {stage === 1 ? (
@@ -57,9 +73,9 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
             <div>
               <label
                 htmlFor="character-identity"
-                className="block text-[10px] font-mono uppercase tracking-wider text-neutral-400 mb-2"
+                className="block font-display text-[11px] uppercase tracking-[0.2em] text-[#5c3a21] mb-2"
               >
-                Character Identity Name
+                True Name
               </label>
               <input
                 id="character-identity"
@@ -67,14 +83,14 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
                 maxLength={50}
                 value={identity}
                 onChange={(e) => setIdentity(e.target.value)}
-                placeholder="Name your hero..."
-                className="w-full bg-neutral-950 border border-neutral-800 focus:border-purple-500 rounded-xl px-4 py-3 text-xs focus:outline-none transition-all text-neutral-200"
+                placeholder="Aden, Edward, Jamie…"
+                className="quill-input w-full text-base px-1 py-2"
               />
             </div>
 
             <div>
-              <p className="block text-[10px] font-mono uppercase tracking-wider text-neutral-400 mb-2">
-                Class Pathway
+              <p className="font-display text-[11px] uppercase tracking-[0.2em] text-[#5c3a21] mb-2">
+                Calling
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {PATHWAYS.map((pathway) => (
@@ -82,10 +98,10 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
                     type="button"
                     key={pathway}
                     onClick={() => setVocation(pathway)}
-                    className={`p-3 text-xs font-bold rounded-xl border uppercase tracking-wider transition-all ${
+                    className={`p-3 text-xs font-display font-bold border-2 uppercase tracking-wider transition-all ${
                       vocation === pathway
-                        ? 'bg-purple-950/40 border-purple-500 text-purple-400 shadow-md shadow-purple-950/30'
-                        : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                        ? 'border-[#9f1239] bg-[#9f1239]/10 text-[#7f1d1d]'
+                        : 'border-[#8b5e34] text-[#5c3a21] hover:border-[#b45309]'
                     }`}
                   >
                     {pathway}
@@ -98,9 +114,9 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
               type="button"
               onClick={() => identity.trim() && setStage(2)}
               disabled={!identity.trim()}
-              className="w-full bg-neutral-100 hover:bg-neutral-200 disabled:opacity-30 text-neutral-950 font-black text-xs uppercase tracking-widest py-3.5 rounded-xl transition-all mt-4"
+              className="wax-button w-full py-3 text-xs uppercase tracking-[0.25em]"
             >
-              Distribute Attribute Points →
+              Carve Attributes →
             </button>
           </div>
         ) : (
@@ -109,27 +125,27 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
               {STAT_KEYS.map((attr) => (
                 <div
                   key={attr}
-                  className="flex items-center justify-between bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3"
+                  className="flex items-center justify-between border border-[#8b5e34] px-3 py-2 bg-[#dfc4a0]/35"
                 >
-                  <span className="text-xs font-mono font-bold tracking-widest text-neutral-300">
+                  <span className="font-display text-xs tracking-[0.2em] text-[#2c1810]">
                     {attr}
                   </span>
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => handleStatAdjust(attr, false)}
-                      className="w-5 h-5 bg-neutral-900 border border-neutral-800 rounded flex items-center justify-center font-mono font-bold text-xs text-neutral-300 hover:border-neutral-700"
+                      className="w-6 h-6 border border-[#8b5e34] font-display text-sm"
                       aria-label={`Decrease ${attr}`}
                     >
                       -
                     </button>
-                    <span className="w-6 text-center text-sm font-mono text-neutral-100">
+                    <span className="w-6 text-center font-display font-black">
                       {attributes[attr]}
                     </span>
                     <button
                       type="button"
                       onClick={() => handleStatAdjust(attr, true)}
-                      className="w-5 h-5 bg-neutral-900 border border-neutral-800 rounded flex items-center justify-center font-mono font-bold text-xs text-neutral-300 hover:border-neutral-700"
+                      className="w-6 h-6 border border-[#8b5e34] font-display text-sm"
                       aria-label={`Increase ${attr}`}
                     >
                       +
@@ -139,20 +155,20 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
               ))}
             </div>
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setStage(1)}
-                className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-bold text-xs uppercase tracking-wider px-4 py-3.5 rounded-xl transition-all border border-neutral-700/40"
+                className="font-display text-xs uppercase tracking-widest px-4 py-3 border border-[#8b5e34] text-[#5c3a21]"
               >
                 Back
               </button>
               <button
                 type="button"
                 onClick={handleFinalize}
-                className="flex-1 bg-purple-600 hover:bg-purple-500 text-neutral-50 font-black text-xs uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-purple-950/40"
+                className="wax-button flex-1 py-3 text-xs uppercase tracking-[0.25em]"
               >
-                Finalize & Manifest
+                Enter the Board
               </button>
             </div>
           </div>
