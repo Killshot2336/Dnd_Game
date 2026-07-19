@@ -301,3 +301,53 @@ body {
   background: radial-gradient(circle, rgba(245, 158, 11, 0.45), transparent 70%);
   pointer-events: none;
 }
+
+@keyframes fanfarePop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.fanfare-pop {
+  animation: fanfarePop 0.35s ease-out;
+}
+
+.dice-result-badge {
+  animation: fanfarePop 0.3s ease-out;
+}
+
+.token-spotlight {
+  filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.85));
+}
+
+.campaign-dress-ashcrown .fp-table-felt {
+  box-shadow:
+    inset 0 0 80px rgba(0, 0, 0, 0.55),
+    inset 0 -40px 60px rgba(120, 80, 40, 0.2),
+    0 30px 60px rgba(0, 0, 0, 0.65);
+}
+
+.campaign-dress-saltwake .fp-table-felt::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 18%;
+  background: linear-gradient(180deg, transparent, rgba(30, 80, 110, 0.35));
+  pointer-events: none;
+}
+
+.campaign-dress-blackroot .fp-lantern {
+  background: radial-gradient(circle, rgba(190, 50, 120, 0.4), transparent 70%);
+}
+
+.spotlight-bar {
+  border-color: #f59e0b;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), transparent);
+}

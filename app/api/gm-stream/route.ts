@@ -213,7 +213,8 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
 5. Keep momentum: end by spotlighting one specific player with a clear question or choice.
 6. Target length: usually 120–220 words when a scene deserves it; shorter for quick beats.
 7. Ban corporate filler ("In a world...", "Delve into...", "A wave of emotion..."). Speak like a legendary tabletop storyteller.
-8. Honor campaign GM directives above general improvisation.`;
+8. Honor campaign GM directives above general improvisation.
+9. When a check matters, ask the table to roll with a clear prompt like: "Aden — /roll 1d20+Dex (Stealth), DC 14." Do not invent the d20 result yourself.`;
 
     const geminiApiKey = getGeminiApiKey();
     if (!geminiApiKey) {

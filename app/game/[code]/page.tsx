@@ -5,8 +5,10 @@ import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import CharacterSetup, { type ForgeJoinPayload } from '@/components/CharacterSetup';
+import DiceResultBadge from '@/components/tabletop/DiceResultBadge';
+import DraggableToken from '@/components/tabletop/DraggableToken';
 import ReactiveStateStrip from '@/components/tabletop/ReactiveStateStrip';
-import TokenPiece from '@/components/tabletop/TokenPiece';
+import StateFanfareBanner from '@/components/tabletop/StateFanfareBanner';
 import {
   applyReactivePatch,
   buildInitialStateData,
@@ -39,6 +41,34 @@ import {
   writeCachedPlayerSeat,
   type CachedPlayerSeat,
 } from '@/lib/player-session';
+import { buildSessionRecap, diffReactiveFanfare, type FanfareEvent } from '@/lib/state-fanfare';
+import {
+  canSeeWhisper,
+  formatRollMessage,
+  formatSpotlightMessage,
+  formatWhisperMessage,
+  isRollCommand,
+  parseRollExpression,
+  parseRollMessage,
+  parseSpotlightCommand,
+  parseWhisper,
+  parseWhisperMessage,
+  resolveRoll,
+  type RollResult,
+} from '@/lib/table-fun';
+import {
+  defaultTokenPos,
+  readTableMeta,
+  writeTableMeta,
+  type TokenTablePos,
+} from '@/lib/table-meta';
+import {
+  playDiceClack,
+  playFanfareTick,
+  playWaxStamp,
+  playWhisperRustle,
+  setTableSfxMuted,
+} from '@/lib/table-sfx';
 import {
   getSupabaseBrowserClient,
   mapChannelStatus,
@@ -98,6 +128,13 @@ function GameRoom({ params }: { params: { code: string } }) {
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [activeSheet, setActiveSheet] = useState<CharacterSheet | null>(null);
   const [sheetTab, setSheetTab] = useState<'stats' | 'soul' | 'gear'>('stats');
+  const [fanfareEvents, setFanfareEvents] = useState<FanfareEvent[]>([]);
+  const [diceBadge, setDiceBadge] = useState<{
+    sender: string;
+    result: RollResult;
+  } | null>(null);
+  const [sfxMuted, setSfxMuted] = useState(false);
+  const [lastSpeaker, setLastSpeaker] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
@@ -107,6 +144,9 @@ function GameRoom({ params }: { params: { code: string } }) {
   const gameIdRef = useRef<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const reconnectLockRef = useRef(false);
+  const tablePersistTimerRef = useRef<number | null>(null);
+  const reactivePrevRef = useRef<ReactiveCampaignState | null>(null);
+  const openingLockRef = useRef(false);
 
   useEffect(() => {
     currentPlayerNameRef.current = currentPlayer?.user_name ?? null;
@@ -285,6 +325,26 @@ function GameRoom({ params }: { params: { code: string } }) {
             ) {
               triggerDiceFromUser(incoming.sender);
             }
+
+            const roll = parseRollMessage(incoming.content ?? '');
+            if (roll) {
+              setDiceBadge({
+                sender: roll.sender,
+                result: {
+                  expression: roll.expression,
+                  rolls: [],
+                  modifier: 0,
+                  total: roll.total,
+                  detail: roll.detail,
+                },
+              });
+              playDiceClack();
+              window.setTimeout(() => setDiceBadge(null), 4200);
+            }
+
+            if (incoming.sender && incoming.sender !== 'GM') {
+              setLastSpeaker(incoming.sender);
+            }
           }
         )
         .subscribe((status) => {
@@ -329,9 +389,12 @@ function GameRoom({ params }: { params: { code: string } }) {
             ? (campaignParam as string)
             : null;
           const campaign = getCampaign(campaignId);
-          const stateData = campaignId
+          const baseState = campaignId
             ? buildInitialStateData(campaignId as 'ashcrown' | 'saltwake' | 'blackroot')
             : { campaignId: null, reactive: null };
+          const stateData = writeTableMeta(baseState as Record<string, unknown>, {
+            openingPosted: true,
+          });
           const opening =
             campaign?.openingNarrative ??
             'The dynamic void initializes. Welcome, degenerates.';
@@ -362,6 +425,18 @@ function GameRoom({ params }: { params: { code: string } }) {
             }
           } else {
             gameData = newGame;
+            // Session open ritual — first chronicle ink
+            try {
+              await supabase.from('messages').insert([
+                {
+                  game_id: newGame.id,
+                  sender: 'GM',
+                  content: opening,
+                },
+              ]);
+            } catch (openError) {
+              console.error('Opening ritual message failed:', openError);
+            }
           }
         }
 
@@ -460,6 +535,63 @@ function GameRoom({ params }: { params: { code: string } }) {
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isGMLoading]);
+
+  // Reactive state fanfare — loud when the world moves
+  useEffect(() => {
+    const next = readReactiveState(game?.state_data);
+    const prev = reactivePrevRef.current;
+    if (next && prev) {
+      const events = diffReactiveFanfare(prev, next);
+      if (events.length > 0) {
+        setFanfareEvents(events);
+        playFanfareTick();
+        playWaxStamp();
+      }
+    }
+    reactivePrevRef.current = next;
+  }, [game?.state_data]);
+
+  useEffect(() => {
+    setTableSfxMuted(sfxMuted);
+  }, [sfxMuted]);
+
+  // Backfill opening ritual for campaigns that never posted it
+  useEffect(() => {
+    if (!game?.id || openingLockRef.current) return;
+    const meta = readTableMeta(game.state_data);
+    if (meta.openingPosted) return;
+    if (messages.length > 0) {
+      openingLockRef.current = true;
+      return;
+    }
+    const campaign = getCampaign(
+      typeof game.state_data?.campaignId === 'string'
+        ? (game.state_data.campaignId as string)
+        : null
+    );
+    const opening = campaign?.openingNarrative ?? game.current_narrative;
+    if (!opening) return;
+
+    openingLockRef.current = true;
+    const run = async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const nextData = writeTableMeta(game.state_data, { openingPosted: true });
+        await supabase.from('messages').insert([
+          { game_id: game.id, sender: 'GM', content: opening },
+        ]);
+        await supabase
+          .from('games')
+          .update({ state_data: nextData })
+          .eq('id', game.id);
+        setGame((prev) => (prev ? { ...prev, state_data: nextData } : prev));
+      } catch (error) {
+        console.error('Opening backfill failed:', error);
+        openingLockRef.current = false;
+      }
+    };
+    void run();
+  }, [game, messages.length]);
 
   // Canvas particle engine with mobile viewport guards
   useEffect(() => {
@@ -727,6 +859,63 @@ function GameRoom({ params }: { params: { code: string } }) {
     }
   };
 
+  const persistTablePatch = useCallback(
+    (patch: Parameters<typeof writeTableMeta>[1]) => {
+      if (!game?.id) return;
+      const nextData = writeTableMeta(game.state_data, patch);
+      setGame((prev) => (prev ? { ...prev, state_data: nextData } : prev));
+
+      if (tablePersistTimerRef.current) {
+        window.clearTimeout(tablePersistTimerRef.current);
+      }
+      tablePersistTimerRef.current = window.setTimeout(() => {
+        void (async () => {
+          try {
+            const supabase = getSupabaseBrowserClient();
+            await supabase
+              .from('games')
+              .update({ state_data: nextData })
+              .eq('id', game.id);
+          } catch (error) {
+            console.error('Table meta persist failed:', error);
+          }
+        })();
+      }, 350);
+    },
+    [game?.id, game?.state_data]
+  );
+
+  const postTableMessage = useCallback(
+    async (sender: string, content: string) => {
+      if (!game?.id) return;
+      const optimistic = createOptimisticMessage(game.id, sender, content);
+      setMessages((prev) => mergeMessageLedger(prev, optimistic));
+      try {
+        const supabase = getSupabaseBrowserClient();
+        await supabase.from('messages').insert([
+          { game_id: game.id, sender, content },
+        ]);
+      } catch (error) {
+        console.error('Table message persist failed:', error);
+        setSyncNotice('Table note held locally — sync will retry.');
+      }
+    },
+    [game?.id]
+  );
+
+  const handleTokenDrag = useCallback(
+    (name: string, pos: TokenTablePos) => {
+      const meta = readTableMeta(game?.state_data);
+      persistTablePatch({
+        tokenPositions: {
+          ...meta.tokenPositions,
+          [name]: pos,
+        },
+      });
+    },
+    [game?.state_data, persistTablePatch]
+  );
+
   const handleExecuteAction = async () => {
     if (!inputMessage.trim() || !currentPlayer?.user_name || !game?.id || isGMLoading) {
       return;
@@ -736,9 +925,48 @@ function GameRoom({ params }: { params: { code: string } }) {
     const senderName = currentPlayer.user_name;
     const activeGameId = game.id;
 
+    // --- Table commands (no GM API) ---
+    if (isRollCommand(userText)) {
+      const parsed = parseRollExpression(userText);
+      if (!parsed) {
+        setSyncNotice('Dice expression unclear — try /roll 1d20+5');
+        return;
+      }
+      setInputMessage('');
+      const result = resolveRoll(parsed);
+      const content = formatRollMessage(senderName, result);
+      setDiceBadge({ sender: senderName, result });
+      playDiceClack();
+      triggerDiceFromUser(senderName);
+      window.setTimeout(() => setDiceBadge(null), 4200);
+      setLastSpeaker(senderName);
+      await postTableMessage(senderName, content);
+      return;
+    }
+
+    const whisper = parseWhisper(userText);
+    if (whisper) {
+      setInputMessage('');
+      const content = formatWhisperMessage(senderName, whisper.target, whisper.body);
+      playWhisperRustle();
+      await postTableMessage(senderName, content);
+      return;
+    }
+
+    const spotlightTarget = parseSpotlightCommand(userText);
+    if (spotlightTarget !== undefined) {
+      setInputMessage('');
+      persistTablePatch({ spotlight: spotlightTarget });
+      playWaxStamp();
+      await postTableMessage('GM', formatSpotlightMessage(spotlightTarget));
+      return;
+    }
+
+    // --- Normal action → GM ---
     setInputMessage('');
     setIsGMLoading(true);
     triggerDiceFromUser(senderName);
+    setLastSpeaker(senderName);
 
     const optimisticPlayerMsg = createOptimisticMessage(activeGameId, senderName, userText);
     setMessages((prev) => mergeMessageLedger(prev, optimisticPlayerMsg));
@@ -785,6 +1013,11 @@ function GameRoom({ params }: { params: { code: string } }) {
         return `${player.user_name} (${player.avatar_class}) HP ${player.current_hp}/${player.max_hp}`;
       });
 
+      const tableMeta = readTableMeta(game.state_data);
+      const spotlightNote = tableMeta.spotlight
+        ? `\n[TABLE SPOTLIGHT: ${tableMeta.spotlight} should be centered this beat unless the fiction clearly cuts away.]`
+        : '';
+
       let gmReply = 'The simulation warped. Repeat your raw action.';
       let statePatch: Partial<ReactiveCampaignState> | null = null;
       try {
@@ -798,7 +1031,7 @@ function GameRoom({ params }: { params: { code: string } }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            playerInput: userText,
+            playerInput: userText + spotlightNote,
             sender: senderName,
             gameId: activeGameId,
             history: activeHistory,
@@ -876,6 +1109,28 @@ function GameRoom({ params }: { params: { code: string } }) {
     }
   };
 
+  const handleQuickRoll = (expression: string) => {
+    setInputMessage(`/roll ${expression}`);
+  };
+
+  const handlePassSpotlight = (name: string | null) => {
+    persistTablePatch({ spotlight: name });
+    playWaxStamp();
+    void postTableMessage('GM', formatSpotlightMessage(name));
+  };
+
+  const handleRecap = () => {
+    const reactive = readReactiveState(game?.state_data);
+    const campaign = getCampaign(
+      typeof game?.state_data?.campaignId === 'string'
+        ? (game.state_data.campaignId as string)
+        : reactive?.campaignId
+    );
+    const recap = buildSessionRecap(campaign?.title, reactive);
+    playWaxStamp();
+    void postTableMessage('Chronicle', `📜 Session recap\n${recap}`);
+  };
+
   const recordPosition = useCallback((name: string, el: HTMLDivElement | null) => {
     if (!el || !name || typeof window === 'undefined') return;
     try {
@@ -946,11 +1201,6 @@ function GameRoom({ params }: { params: { code: string } }) {
   }
 
   const activeName = currentPlayer?.user_name ?? '';
-  const adjacentPlayers = players.filter(
-    (player) => (player?.user_name ?? '') !== activeName
-  );
-  const leftParty = adjacentPlayers.slice(0, Math.ceil(adjacentPlayers.length / 2));
-  const rightParty = adjacentPlayers.slice(Math.ceil(adjacentPlayers.length / 2));
   const activeHp = safeHp(currentPlayer);
   const narrative =
     game?.current_narrative ?? 'The dynamic void initializes. Welcome, degenerates.';
@@ -966,10 +1216,29 @@ function GameRoom({ params }: { params: { code: string } }) {
   );
   const tableArt = campaign?.tableArt ?? BOARD_TEXTURE;
   const mapArt = campaign?.mapArt ?? campaign?.coverArt ?? BOARD_TEXTURE;
+  const tableMeta = readTableMeta(game?.state_data);
+  const dressClass = campaign ? `campaign-dress-${campaign.id}` : '';
+
+  const tokenPosFor = (player: PlayerEntity, index: number, isSelf: boolean) => {
+    const saved = tableMeta.tokenPositions[player.user_name];
+    if (saved) return saved;
+    return defaultTokenPos(index, players.length, isSelf);
+  };
+
+  const visibleMessages = messages.filter((message) =>
+    canSeeWhisper(message?.content ?? '', currentPlayer?.user_name)
+  );
 
   return (
-    <div className="min-h-screen tabletop-shell overflow-hidden antialiased select-none relative text-[#f3e6c8]">
+    <div
+      className={`min-h-screen tabletop-shell overflow-hidden antialiased select-none relative text-[#f3e6c8] ${dressClass}`}
+    >
       <canvas ref={canvasRef} className="absolute inset-0 z-50 pointer-events-none" />
+
+      <StateFanfareBanner
+        events={fanfareEvents}
+        onDismiss={() => setFanfareEvents([])}
+      />
 
       {/* Room atmosphere behind the table */}
       <div
@@ -986,13 +1255,23 @@ function GameRoom({ params }: { params: { code: string } }) {
         SEAL {sessionCode}
         {campaign ? ` · ${campaign.title}` : ''}
       </div>
-      <button
-        type="button"
-        onClick={() => setIsTrayOpen((open) => !open)}
-        className="absolute top-3 right-4 z-30 wax-button px-4 py-2 text-[10px] uppercase tracking-[0.25em]"
-      >
-        Satchel
-      </button>
+      <div className="absolute top-3 right-4 z-30 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setSfxMuted((m) => !m)}
+          className="border border-[#8b5e34] px-3 py-2 font-display text-[10px] uppercase tracking-[0.2em] text-[#c4a574] bg-[#140e0a]/70"
+          title="Toggle table sounds"
+        >
+          {sfxMuted ? 'SFX Off' : 'SFX On'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsTrayOpen((open) => !open)}
+          className="wax-button px-4 py-2 text-[10px] uppercase tracking-[0.25em]"
+        >
+          Satchel
+        </button>
+      </div>
 
       {syncNotice && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 parchment-panel px-4 py-1.5 text-[11px] max-w-[90vw]">
@@ -1046,49 +1325,30 @@ function GameRoom({ params }: { params: { code: string } }) {
               </div>
             </div>
 
-            {/* Mid-table tokens (party across from you / along sides) */}
-            <div className="absolute inset-x-4 top-[38%] bottom-[28%] flex items-center justify-between px-2 sm:px-8">
-              <div className="flex flex-col gap-5 items-center">
-                {leftParty.map((player) => (
-                  <div
-                    key={player.id}
-                    data-player-anchor={player.user_name}
-                    className="fp-token-lift"
-                  >
-                    <TokenPiece player={player} onMount={recordPosition} size="sm" />
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-col gap-5 items-center">
-                {rightParty.map((player) => (
-                  <div
-                    key={player.id}
-                    data-player-anchor={player.user_name}
-                    className="fp-token-lift"
-                  >
-                    <TokenPiece player={player} onMount={recordPosition} size="sm" />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Your seat — near edge of the table */}
-            <div
-              className="absolute bottom-[6%] left-1/2 -translate-x-1/2 fp-near-edge flex flex-col items-center gap-1"
-              data-player-anchor={currentPlayer?.user_name ?? 'self'}
-            >
-              <div className="fp-token-lift">
-                <TokenPiece
-                  player={currentPlayer}
-                  emphasized
+            {/* Draggable party tokens */}
+            {players.map((player, index) => {
+              const isSelf = player.user_name === activeName;
+              return (
+                <DraggableToken
+                  key={player.id}
+                  player={player}
+                  pos={tokenPosFor(player, index, isSelf)}
+                  emphasized={isSelf}
+                  spotlighted={
+                    !!tableMeta.spotlight &&
+                    tableMeta.spotlight.toLowerCase() ===
+                      player.user_name.toLowerCase()
+                  }
+                  size={isSelf ? 'lg' : 'sm'}
                   onMount={recordPosition}
-                  size="lg"
+                  onDragEnd={handleTokenDrag}
                 />
-              </div>
-              <p className="font-display text-[10px] uppercase tracking-[0.3em] text-[#f59e0b] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
-                Your seat
-              </p>
-            </div>
+              );
+            })}
+
+            {diceBadge && (
+              <DiceResultBadge sender={diceBadge.sender} result={diceBadge.result} />
+            )}
           </div>
 
           <ReactiveStateStrip
@@ -1099,34 +1359,92 @@ function GameRoom({ params }: { params: { code: string } }) {
 
         {/* PARCHMENT CHRONICLE — bottom split */}
         <section className="parchment-panel min-h-0 rounded-sm flex flex-col overflow-hidden">
-          <div className="px-4 py-2 border-b border-[#8b5e34]/60 flex items-center justify-between">
+          <div className="px-4 py-2 border-b border-[#8b5e34]/60 flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-display text-sm font-bold tracking-wide text-[#2c1810]">
               {campaign ? `${campaign.title} Chronicle` : 'Campaign Chronicle'}
             </h3>
-            {isGMLoading && (
-              <span className="text-[11px] italic text-[#7f1d1d]">Ink still wet…</span>
-            )}
+            <div className="flex items-center gap-2">
+              {lastSpeaker && (
+                <span className="text-[10px] uppercase tracking-wider text-[#5c3a21]">
+                  Last spoke · {lastSpeaker}
+                </span>
+              )}
+              {isGMLoading && (
+                <span className="text-[11px] italic text-[#7f1d1d]">Ink still wet…</span>
+              )}
+            </div>
+          </div>
+
+          {/* Soft spotlight bar */}
+          <div className="spotlight-bar border-b border-[#8b5e34]/40 px-3 py-1.5 flex flex-wrap items-center gap-2">
+            <span className="font-display text-[10px] uppercase tracking-[0.2em] text-[#7f1d1d]">
+              Spotlight
+            </span>
+            <button
+              type="button"
+              onClick={() => handlePassSpotlight(null)}
+              className={`text-[10px] uppercase tracking-wider px-2 py-1 border ${
+                !tableMeta.spotlight
+                  ? 'border-[#f59e0b] text-[#7f1d1d]'
+                  : 'border-[#8b5e34] text-[#5c3a21]'
+              }`}
+            >
+              Open
+            </button>
+            {players.map((player) => (
+              <button
+                key={`spot-${player.id}`}
+                type="button"
+                onClick={() => handlePassSpotlight(player.user_name)}
+                className={`text-[10px] uppercase tracking-wider px-2 py-1 border ${
+                  tableMeta.spotlight?.toLowerCase() ===
+                  player.user_name.toLowerCase()
+                    ? 'border-[#f59e0b] text-[#7f1d1d] bg-[#f59e0b]/15'
+                    : 'border-[#8b5e34] text-[#5c3a21]'
+                }`}
+              >
+                {player.user_name}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={handleRecap}
+              className="ml-auto text-[10px] uppercase tracking-wider px-2 py-1 border border-[#8b5e34] text-[#5c3a21]"
+            >
+              Recap
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-3 space-y-3">
-            {messages.length === 0 && (
+            {visibleMessages.length === 0 && (
               <p className="text-sm italic text-[#5c3a21] whitespace-pre-wrap">
                 {narrative}
               </p>
             )}
-            {messages.map((message) => {
+            {visibleMessages.map((message) => {
               const isGm = message?.sender === 'GM';
+              const isChronicle = message?.sender === 'Chronicle';
+              const whisper = parseWhisperMessage(message?.content ?? '');
+              const roll = parseRollMessage(message?.content ?? '');
               return (
                 <div key={`${message.id}-${message.created_at}`} className="ink-line">
                   <p
                     className={`font-display text-[11px] uppercase tracking-[0.2em] ${
-                      isGm ? 'text-[#9f1239]' : 'text-[#5c3a21]'
+                      isGm || isChronicle
+                        ? 'text-[#9f1239]'
+                        : whisper
+                          ? 'text-[#1d4ed8]'
+                          : roll
+                            ? 'text-[#b45309]'
+                            : 'text-[#5c3a21]'
                     }`}
                   >
-                    {message?.sender ?? 'Unknown'}
+                    {whisper
+                      ? `Whisper · ${whisper.from} → ${whisper.to}`
+                      : message?.sender ?? 'Unknown'}
                   </p>
                   <p className="text-[15px] leading-relaxed text-[#2c1810] whitespace-pre-wrap">
-                    {message?.content ?? ''}
+                    {whisper ? whisper.body : message?.content ?? ''}
                   </p>
                 </div>
               );
@@ -1141,6 +1459,18 @@ function GameRoom({ params }: { params: { code: string } }) {
               void handleExecuteAction();
             }}
           >
+            <div className="flex flex-wrap gap-2">
+              {['1d20', '1d20+5', '2d6', '1d8'].map((expr) => (
+                <button
+                  key={expr}
+                  type="button"
+                  onClick={() => handleQuickRoll(expr)}
+                  className="font-mono text-[11px] px-2 py-1 border border-[#8b5e34] text-[#5c3a21] hover:bg-[#c4a574]/30"
+                >
+                  /roll {expr}
+                </button>
+              ))}
+            </div>
             <textarea
               value={inputMessage}
               onChange={(event) => setInputMessage(event.target.value)}
@@ -1151,13 +1481,13 @@ function GameRoom({ params }: { params: { code: string } }) {
                 }
               }}
               rows={2}
-              placeholder="Dip the quill — declare your deed…"
+              placeholder="Deed, /roll 1d20+5, /w Name secret, /spotlight Name…"
               className="quill-input w-full text-[15px] px-1 py-2"
               disabled={isGMLoading}
             />
             <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] italic text-[#5c3a21]">
-                Enter seals the deed · Shift+Enter new line
+                Enter seals · drag tokens on the wood
               </p>
               <button
                 type="submit"
