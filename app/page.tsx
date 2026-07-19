@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import GameStage from '@/components/aaa/GameStage';
 import { CAMPAIGNS, type CampaignId } from '@/lib/campaigns';
 import { ROOM_BG } from '@/lib/game-art';
 import { playWaxStamp } from '@/lib/table-sfx';
+import { readLocalVault, removeLocalVault, type LocalVaultEntry } from '@/lib/vault';
 
 type GateMode = 'home' | 'campaigns';
 
@@ -16,6 +17,11 @@ export default function HomeDashboard() {
   const [loading, setLoading] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [pickedId, setPickedId] = useState<CampaignId | null>(null);
+  const [vault, setVault] = useState<LocalVaultEntry[]>([]);
+
+  useEffect(() => {
+    setVault(readLocalVault());
+  }, []);
 
   const generateLobbyCode = (): string => {
     const pool = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -42,6 +48,11 @@ export default function HomeDashboard() {
     }
   };
 
+  const handleContinue = (entry: LocalVaultEntry) => {
+    playWaxStamp();
+    router.push(`/game/${entry.code}?campaign=${entry.campaignId}`);
+  };
+
   return (
     <GameStage className="tabletop-shell" ambient>
       <div className="relative flex flex-col items-center justify-center min-h-screen p-4">
@@ -59,11 +70,11 @@ export default function HomeDashboard() {
           <div className="space-y-2">
             <p className="session-seal text-[10px]">Voidline Tabletop</p>
             <h1 className="font-display text-4xl sm:text-5xl text-[#f0e2c4] drop-shadow-[0_4px_12px_rgba(0,0,0,0.85)]">
-              {mode === 'home' ? 'The table awaits' : 'Choose a campaign'}
+              {mode === 'home' ? 'The Vault' : 'Choose a campaign'}
             </h1>
             <p className="text-[#b8965c] italic text-sm">
               {mode === 'home'
-                ? 'Aden · Edward · Jamie — no rails, only the wood and the ink.'
+                ? 'Aden · Edward · Jamie — seals remember. Continues await.'
                 : 'Three doors. Heat, clocks, and memory keep every choice.'}
             </p>
           </div>
@@ -76,6 +87,56 @@ export default function HomeDashboard() {
                 border: 'none',
               }}
             >
+              {vault.length > 0 && (
+                <div className="space-y-2 mb-2">
+                  <p className="text-[11px] italic text-[#5c3a21]">Continue from the vault</p>
+                  {vault.map((entry) => (
+                    <div
+                      key={entry.code}
+                      className="vault-continue-row group relative overflow-hidden border border-[#8b5e34]/70"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleContinue(entry)}
+                        className="w-full text-left flex gap-3 p-2 pr-8 hover:bg-[#dfc4a0]/25 transition-colors"
+                      >
+                        <div className="relative w-14 h-14 shrink-0 overflow-hidden">
+                          <Image
+                            src={entry.coverArt}
+                            alt=""
+                            fill
+                            sizes="56px"
+                            className="object-cover plate-ink opacity-90"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display text-sm text-[#2a160e] truncate">
+                            {entry.title}
+                          </p>
+                          <p className="text-[11px] italic text-[#5c3a21] truncate">
+                            {entry.code} · {entry.characters.join(', ') || 'empty seats'}
+                          </p>
+                          <p className="text-[11px] italic text-[#7a5a38] line-clamp-1 mt-0.5">
+                            {entry.lastChapter}
+                          </p>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        className="absolute top-1 right-1 text-[10px] italic text-[#8b4510]/70 hover:text-[#7f1d1d] px-1"
+                        title="Forget this seal"
+                        onClick={() => {
+                          removeLocalVault(entry.code);
+                          setVault(readLocalVault());
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={() => setMode('campaigns')}
@@ -161,7 +222,7 @@ export default function HomeDashboard() {
                 }}
                 className="text-[12px] italic text-[#b8965c] hover:text-[#f0e2c4]"
               >
-                ← Return to the gate
+                ← Return to the vault
               </button>
             </div>
           )}

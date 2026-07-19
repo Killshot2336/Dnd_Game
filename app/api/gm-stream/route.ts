@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import {
-  extractStatePatch,
   formatStateForGm,
   getCampaign,
   formatCampaignBible,
   parseCampaignState,
   type ReactiveCampaignState,
 } from '@/lib/campaigns';
+import { extractGmProtocol, GM_VAULT_PROTOCOL } from '@/lib/gm-protocol';
 import { sanitizeHistory } from '@/lib/game-guards';
 import type { HistoryMessage } from '@/types/database';
 
@@ -186,18 +186,8 @@ ${liveStateBlock}
 Treat flags, faction heat, clocks, NPC memory, and location state as durable truth.
 When player actions change the world, update those systems. Heat should move when factions are helped/hurt. Clocks advance when time/pressure ticks. NPC memory records what they witnessed. Location state shifts when a place changes.
 
-[STATE PATCH PROTOCOL]
-After your narrative (not inside it), if anything material changed, append exactly one fenced patch:
-
-<<<STATE
-{"flags":{"example":true},"heat":{"faction_id":2},"clocks":{"clock_id":{"filled":3,"segments":8,"name":"Clock Name"}},"npcMemory":{"npc_id":["note"]},"locationState":{"loc_id":"status"},"lastConsequence":"One sentence consequence."}
-STATE>>>
-
-Rules for the patch:
-- Only include keys that changed (partial patch).
-- clocks entries must include filled, segments, and name.
-- npcMemory values are arrays of short notes (newest last); send only the new note(s) for that NPC.
-- Never put the STATE block mid-sentence. Players must not see raw JSON.
+[VAULT PROTOCOL]
+${GM_VAULT_PROTOCOL}
 
 [ACTIVE ACTOR SHEET]
 ${actorSheet}
@@ -210,11 +200,12 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
 2. Describe the environment with concrete detail (light, smell, sound, tactical geometry).
 3. Resolve actions with 5e-flavored rulings: name the check/save, suggest a DC, ask for d20 + relevant mod when risk matters.
 4. Failures create complications and new angles — not brick walls.
-5. Keep momentum: end by spotlighting one specific player with a clear question or choice.
+5. Keep momentum: end by spotlighting one specific player with a clear question or choice — and prefer BEATS when the fork is real.
 6. Target length: usually 120–220 words when a scene deserves it; shorter for quick beats.
 7. Ban corporate filler ("In a world...", "Delve into...", "A wave of emotion..."). Speak like a legendary tabletop storyteller.
 8. Honor campaign GM directives above general improvisation.
-9. When a check matters, ask the table to roll with a clear prompt like: "Aden — /roll 1d20+Dex (Stealth), DC 14." Do not invent the d20 result yourself.`;
+9. When a check matters, emit CHECKS and also say it in fiction. Do not invent the d20 result yourself.
+10. Prefer TITLE when a clock fills or clash begins. Prefer CLASH/HARM when steel is drawn.`;
 
     const geminiApiKey = getGeminiApiKey();
     if (!geminiApiKey) {
@@ -298,8 +289,18 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
       );
     }
 
-    const { cleanReply, patch } = extractStatePatch(replyText);
-    return NextResponse.json({ reply: cleanReply, statePatch: patch });
+    const protocol = extractGmProtocol(replyText);
+    return NextResponse.json({
+      reply: protocol.cleanReply,
+      statePatch: protocol.statePatch,
+      beats: protocol.beats,
+      checks: protocol.checks,
+      harm: protocol.harm,
+      loot: protocol.loot,
+      titleCard: protocol.titleCard,
+      clashStart: protocol.clashStart,
+      clashEnd: protocol.clashEnd,
+    });
   } catch (error) {
     console.error('API Pipeline Crash:', error);
     return NextResponse.json(

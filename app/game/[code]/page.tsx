@@ -10,10 +10,15 @@ import DiceResultBadge from '@/components/tabletop/DiceResultBadge';
 import DraggableToken from '@/components/tabletop/DraggableToken';
 import ReactiveStateStrip from '@/components/tabletop/ReactiveStateStrip';
 import StateFanfareBanner from '@/components/tabletop/StateFanfareBanner';
+import BeatChoices from '@/components/vault/BeatChoices';
+import ClashHud from '@/components/vault/ClashHud';
+import HostSatchel from '@/components/vault/HostSatchel';
+import LevelUpRitual from '@/components/vault/LevelUpRitual';
+import PendingChecks from '@/components/vault/PendingChecks';
+import TitleCard from '@/components/vault/TitleCard';
 import {
   applyReactivePatch,
   buildInitialStateData,
-  extractStatePatch,
   getCampaign,
   isCampaignId,
   readReactiveState,
@@ -25,7 +30,13 @@ import {
   INVENTORY_SLOTS,
   portraitForPlayer,
 } from '@/lib/game-art';
-import { compactSheetForGm, sheetSnapshot, type CharacterSheet } from '@/lib/character-sheet';
+import {
+  abilityModifier,
+  compactSheetForGm,
+  sheetSnapshot,
+  type CharacterSheet,
+} from '@/lib/character-sheet';
+import { extractGmProtocol, mergeProtocolIntoVault } from '@/lib/gm-protocol';
 import {
   createOptimisticMessage,
   isUniqueViolation,
@@ -77,6 +88,17 @@ import {
   safeRemoveChannel,
   type ChannelHealth,
 } from '@/lib/supabase';
+import {
+  buildLocalVaultEntry,
+  deriveChapterFromState,
+  ensureClashCombatant,
+  readVaultRoom,
+  upsertLocalVault,
+  writeVaultRoom,
+  type ClashZone,
+  type VaultBeat,
+  type VaultCheck,
+} from '@/lib/vault';
 import type {
   AbilityScores,
   GameRecord,
@@ -85,6 +107,17 @@ import type {
 } from '@/types/database';
 
 const HEARTBEAT_MS = 12_000;
+
+function abilityKeyFromLabel(raw: string): keyof AbilityScores {
+  const key = raw.trim().toLowerCase().slice(0, 3);
+  if (key === 'str') return 'STR';
+  if (key === 'dex') return 'DEX';
+  if (key === 'con') return 'CON';
+  if (key === 'int') return 'INT';
+  if (key === 'wis') return 'WIS';
+  if (key === 'cha') return 'CHA';
+  return 'DEX';
+}
 
 interface DiceParticle {
   id: number;
@@ -138,6 +171,9 @@ function GameRoom({ params }: { params: { code: string } }) {
   const [sfxMuted, setSfxMuted] = useState(false);
   const [lastSpeaker, setLastSpeaker] = useState<string | null>(null);
   const [screenPunch, setScreenPunch] = useState(false);
+  const [hostOpen, setHostOpen] = useState(false);
+  const [levelUpOpen, setLevelUpOpen] = useState(false);
+  const [localTitleDismissed, setLocalTitleDismissed] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
@@ -148,6 +184,7 @@ function GameRoom({ params }: { params: { code: string } }) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const reconnectLockRef = useRef(false);
   const tablePersistTimerRef = useRef<number | null>(null);
+  const vaultPersistTimerRef = useRef<number | null>(null);
   const reactivePrevRef = useRef<ReactiveCampaignState | null>(null);
   const openingLockRef = useRef(false);
 
@@ -553,9 +590,57 @@ function GameRoom({ params }: { params: { code: string } }) {
         setScreenPunch(true);
         window.setTimeout(() => setScreenPunch(false), 320);
       }
+
+      const campaignTitle =
+        getCampaign(
+          typeof game?.state_data?.campaignId === 'string'
+            ? (game.state_data.campaignId as string)
+            : next.campaignId
+        )?.title ?? 'Campaign';
+      const chapter = deriveChapterFromState(prev, next, campaignTitle);
+      if (chapter && game?.id) {
+        const vault = readVaultRoom(game.state_data);
+        const chapters = [chapter, ...vault.chapters].slice(0, 12);
+        const titleCard = {
+          title: chapter.title,
+          subtitle: chapter.summary,
+          kind: 'clock' as const,
+        };
+        const nextData = writeVaultRoom(game.state_data, { chapters, titleCard });
+        setGame((g) => (g ? { ...g, state_data: nextData } : g));
+        setLocalTitleDismissed(null);
+        void (async () => {
+          try {
+            const supabase = getSupabaseBrowserClient();
+            await supabase.from('games').update({ state_data: nextData }).eq('id', game.id);
+          } catch (error) {
+            console.error('Chapter vault persist failed:', error);
+          }
+        })();
+      }
     }
     reactivePrevRef.current = next;
-  }, [game?.state_data]);
+  }, [game?.id, game?.state_data]);
+
+  // Mirror table into local continue vault
+  useEffect(() => {
+    if (!game || !currentPlayer || typeof window === 'undefined') return;
+    const reactive = readReactiveState(game.state_data);
+    const vault = readVaultRoom(game.state_data);
+    const campaignId =
+      (typeof game.state_data?.campaignId === 'string'
+        ? game.state_data.campaignId
+        : reactive?.campaignId) ?? null;
+    if (!campaignId) return;
+    const entry = buildLocalVaultEntry({
+      campaignId,
+      code: sessionCode,
+      characters: players.map((p) => p.user_name).filter(Boolean),
+      reactive,
+      lastChapter: vault.chapters[0]?.title ?? vault.chapters[0]?.summary,
+    });
+    if (entry) upsertLocalVault(entry);
+  }, [game, currentPlayer, players, sessionCode]);
 
   useEffect(() => {
     setTableSfxMuted(sfxMuted);
@@ -891,6 +976,48 @@ function GameRoom({ params }: { params: { code: string } }) {
     [game?.id, game?.state_data]
   );
 
+  const persistVaultPatch = useCallback(
+    (patch: Parameters<typeof writeVaultRoom>[1]) => {
+      if (!game?.id) return;
+      const nextData = writeVaultRoom(game.state_data, patch);
+      setGame((prev) => (prev ? { ...prev, state_data: nextData } : prev));
+
+      if (vaultPersistTimerRef.current) {
+        window.clearTimeout(vaultPersistTimerRef.current);
+      }
+      vaultPersistTimerRef.current = window.setTimeout(() => {
+        void (async () => {
+          try {
+            const supabase = getSupabaseBrowserClient();
+            await supabase
+              .from('games')
+              .update({ state_data: nextData })
+              .eq('id', game.id);
+          } catch (error) {
+            console.error('Vault persist failed:', error);
+          }
+        })();
+      }, 350);
+    },
+    [game?.id, game?.state_data]
+  );
+
+  const persistStateData = useCallback(
+    (nextData: Record<string, unknown>) => {
+      if (!game?.id) return;
+      setGame((prev) => (prev ? { ...prev, state_data: nextData } : prev));
+      void (async () => {
+        try {
+          const supabase = getSupabaseBrowserClient();
+          await supabase.from('games').update({ state_data: nextData }).eq('id', game.id);
+        } catch (error) {
+          console.error('State data persist failed:', error);
+        }
+      })();
+    },
+    [game?.id]
+  );
+
   const postTableMessage = useCallback(
     async (sender: string, content: string) => {
       if (!game?.id) return;
@@ -970,6 +1097,18 @@ function GameRoom({ params }: { params: { code: string } }) {
 
     // --- Normal action → GM ---
     setInputMessage('');
+    const vaultBefore = readVaultRoom(game.state_data);
+    if (vaultBefore.hostSkipArbiter) {
+      setLastSpeaker(senderName);
+      await postTableMessage(senderName, userText);
+      persistVaultPatch({ hostSkipArbiter: false, pendingBeats: [] });
+      void postTableMessage(
+        'Chronicle',
+        'Host sealed the ink without the Arbiter — the table holds the deed.'
+      );
+      return;
+    }
+
     setIsGMLoading(true);
     triggerDiceFromUser(senderName);
     setLastSpeaker(senderName);
@@ -1026,6 +1165,7 @@ function GameRoom({ params }: { params: { code: string } }) {
 
       let gmReply = 'The simulation warped. Repeat your raw action.';
       let statePatch: Partial<ReactiveCampaignState> | null = null;
+      let protocol = extractGmProtocol('');
       try {
         const reactive = readReactiveState(game.state_data);
         const campaignId =
@@ -1051,11 +1191,43 @@ function GameRoom({ params }: { params: { code: string } }) {
         const data = (await res.json()) as {
           reply?: string;
           statePatch?: Partial<ReactiveCampaignState> | null;
+          beats?: VaultBeat[] | null;
+          checks?: VaultCheck[] | null;
+          harm?: { target: string; amount: number }[] | null;
+          loot?: string[] | null;
+          titleCard?: { title: string; subtitle: string; kind?: string } | null;
+          clashStart?: unknown;
+          clashEnd?: boolean;
         };
         if (typeof data?.reply === 'string' && data.reply.trim()) {
-          const extracted = extractStatePatch(data.reply.trim());
-          gmReply = extracted.cleanReply;
-          statePatch = data.statePatch ?? extracted.patch;
+          protocol = extractGmProtocol(data.reply.trim());
+          // Prefer server-parsed fields when present; fall back to client strip
+          gmReply = protocol.cleanReply;
+          statePatch = data.statePatch ?? protocol.statePatch;
+          protocol = {
+            ...protocol,
+            cleanReply: gmReply,
+            statePatch,
+            beats: data.beats ?? protocol.beats,
+            checks: data.checks ?? protocol.checks,
+            harm: data.harm ?? protocol.harm,
+            loot: data.loot ?? protocol.loot,
+            titleCard: data.titleCard
+              ? {
+                  title: data.titleCard.title,
+                  subtitle: data.titleCard.subtitle ?? '',
+                  kind:
+                    data.titleCard.kind === 'clock' ||
+                    data.titleCard.kind === 'clash' ||
+                    data.titleCard.kind === 'loot' ||
+                    data.titleCard.kind === 'chapter'
+                      ? data.titleCard.kind
+                      : 'chapter',
+                }
+              : protocol.titleCard,
+            clashEnd: data.clashEnd ?? protocol.clashEnd,
+            clashStart: (data.clashStart as typeof protocol.clashStart) ?? protocol.clashStart,
+          };
         }
       } catch (apiError) {
         console.error('GM API transport failure:', apiError);
@@ -1065,12 +1237,68 @@ function GameRoom({ params }: { params: { code: string } }) {
       const optimisticGmMsg = createOptimisticMessage(activeGameId, 'GM', gmReply);
       setMessages((prev) => mergeMessageLedger(prev, optimisticGmMsg));
 
-      let nextStateData = game.state_data ?? {};
+      let nextStateData = (game.state_data ?? {}) as Record<string, unknown>;
       if (statePatch) {
-        nextStateData = applyReactivePatch(
-          (game.state_data ?? {}) as Record<string, unknown>,
-          statePatch
+        nextStateData = applyReactivePatch(nextStateData, statePatch);
+      }
+
+      const vaultMerged = mergeProtocolIntoVault(readVaultRoom(nextStateData), protocol);
+      if (protocol.loot && protocol.loot.length > 0) {
+        await postTableMessage(
+          'Chronicle',
+          `Loot surfaces:\n${protocol.loot.map((item) => `• ${item}`).join('\n')}`
         );
+      }
+      nextStateData = writeVaultRoom(nextStateData, vaultMerged);
+      if (protocol.titleCard) setLocalTitleDismissed(null);
+
+      // Sync player HP into clash roster when clash starts
+      if (protocol.clashStart && protocol.clashStart.length > 0) {
+        let clash = vaultMerged.clash;
+        for (const player of players) {
+          clash = ensureClashCombatant(
+            clash,
+            player.user_name,
+            Math.max(1, player.max_hp || 10)
+          );
+          clash = {
+            ...clash,
+            combatants: clash.combatants.map((c) =>
+              c.name.toLowerCase() === player.user_name.toLowerCase()
+                ? {
+                    ...c,
+                    hp: Math.max(0, player.current_hp ?? c.hp),
+                    maxHp: Math.max(1, player.max_hp || c.maxHp),
+                  }
+                : c
+            ),
+          };
+        }
+        nextStateData = writeVaultRoom(nextStateData, { clash });
+      }
+
+      // Apply harm to player HP rows when named
+      if (protocol.harm && protocol.harm.length > 0) {
+        for (const h of protocol.harm) {
+          const target = players.find(
+            (p) =>
+              p.user_name.toLowerCase() === h.target.toLowerCase() ||
+              p.user_name.toLowerCase().includes(h.target.toLowerCase())
+          );
+          if (!target) continue;
+          const nextHp = Math.max(0, (target.current_hp ?? 0) - h.amount);
+          setPlayers((prev) =>
+            prev.map((p) => (p.id === target.id ? { ...p, current_hp: nextHp } : p))
+          );
+          try {
+            await supabase
+              .from('players')
+              .update({ current_hp: nextHp })
+              .eq('id', target.id);
+          } catch (hpError) {
+            console.error('Harm HP persist failed:', hpError);
+          }
+        }
       }
 
       setGame((prev) =>
@@ -1100,13 +1328,13 @@ function GameRoom({ params }: { params: { code: string } }) {
       }
 
       try {
-        const updatePayload: Record<string, unknown> = {
-          current_narrative: gmReply,
-        };
-        if (statePatch) {
-          updatePayload.state_data = nextStateData;
-        }
-        await supabase.from('games').update(updatePayload).eq('id', activeGameId);
+        await supabase
+          .from('games')
+          .update({
+            current_narrative: gmReply,
+            state_data: nextStateData,
+          })
+          .eq('id', activeGameId);
       } catch (narrativeError) {
         console.error('Narrative persist failure:', narrativeError);
       }
@@ -1135,6 +1363,196 @@ function GameRoom({ params }: { params: { code: string } }) {
     const recap = buildSessionRecap(campaign?.title, reactive);
     playWaxStamp();
     void postTableMessage('Chronicle', `📜 Session recap\n${recap}`);
+  };
+
+  const handleBeatChoice = (beat: VaultBeat) => {
+    playWaxStamp();
+    persistVaultPatch({ pendingBeats: [] });
+    const line = `[Beat] ${beat.label}${beat.hint ? ` — ${beat.hint}` : ''}`;
+    setInputMessage(line);
+  };
+
+  const handlePendingCheck = (check: VaultCheck) => {
+    const ability = abilityKeyFromLabel(check.ability);
+    const score =
+      activeSheet?.stats?.[ability] ??
+      safeStat(currentPlayer, ability);
+    const mod = abilityModifier(score);
+    const expr = `1d20${mod >= 0 ? `+${mod}` : mod}`;
+    playDiceClack();
+    persistVaultPatch({
+      pendingChecks: readVaultRoom(game?.state_data).pendingChecks.filter(
+        (c) => c.id !== check.id
+      ),
+    });
+    setInputMessage(
+      `/roll ${expr} (${ability} · ${check.label} · DC ${check.dc})`
+    );
+  };
+
+  const handleClashZone = (name: string, zone: ClashZone) => {
+    const vault = readVaultRoom(game?.state_data);
+    persistVaultPatch({
+      clash: {
+        ...vault.clash,
+        combatants: vault.clash.combatants.map((c) =>
+          c.name === name ? { ...c, zone } : c
+        ),
+      },
+    });
+  };
+
+  const handleHostAdvanceClock = (clockId: string, delta: number) => {
+    const reactive = readReactiveState(game?.state_data);
+    if (!reactive?.clocks[clockId] || !game) return;
+    const clock = reactive.clocks[clockId];
+    const filled = Math.max(0, Math.min(clock.segments, clock.filled + delta));
+    const next = applyReactivePatch(game.state_data as Record<string, unknown>, {
+      clocks: {
+        [clockId]: { ...clock, filled },
+      },
+      lastConsequence:
+        delta > 0
+          ? `${clock.name} advances to ${filled}/${clock.segments}.`
+          : `${clock.name} eases to ${filled}/${clock.segments}.`,
+    });
+    persistStateData(next);
+    playWaxStamp();
+  };
+
+  const handleHostBumpHeat = (factionId: string, delta: number) => {
+    const reactive = readReactiveState(game?.state_data);
+    if (!reactive || !game) return;
+    const value = Math.max(0, (reactive.heat[factionId] ?? 0) + delta);
+    const next = applyReactivePatch(game.state_data as Record<string, unknown>, {
+      heat: { [factionId]: value },
+      lastConsequence: `Faction heat ${factionId} → ${value}.`,
+    });
+    persistStateData(next);
+    playWaxStamp();
+  };
+
+  const handleHostWhisperNpc = (npcLabel: string, body: string) => {
+    playWhisperRustle();
+    void postTableMessage(
+      'Chronicle',
+      `NPC murmur — ${npcLabel}: ${body}`
+    );
+  };
+
+  const handleInjectSetPiece = () => {
+    const reactive = readReactiveState(game?.state_data);
+    const liveCampaign = getCampaign(
+      typeof game?.state_data?.campaignId === 'string'
+        ? (game.state_data.campaignId as string)
+        : reactive?.campaignId
+    );
+    const piece =
+      liveCampaign?.sessionOneSetPiece ??
+      'The wood groans. Something under the table wants a name.';
+    playWaxStamp();
+    void postTableMessage('GM', piece);
+    persistVaultPatch({
+      titleCard: {
+        title: 'Set-piece',
+        subtitle: liveCampaign?.title ?? 'The table turns',
+        kind: 'chapter',
+      },
+    });
+    setLocalTitleDismissed(null);
+  };
+
+  const handleStartClash = () => {
+    let clash = { active: true, combatants: [] as ReturnType<typeof readVaultRoom>['clash']['combatants'] };
+    for (const player of players) {
+      clash = ensureClashCombatant(
+        clash,
+        player.user_name,
+        Math.max(1, player.max_hp || 10)
+      );
+      clash = {
+        ...clash,
+        combatants: clash.combatants.map((c) =>
+          c.name.toLowerCase() === player.user_name.toLowerCase()
+            ? {
+                ...c,
+                hp: Math.max(0, player.current_hp ?? c.maxHp),
+                maxHp: Math.max(1, player.max_hp || c.maxHp),
+              }
+            : c
+        ),
+      };
+    }
+    clash = ensureClashCombatant(clash, 'Rival Blade', 16);
+    persistVaultPatch({
+      clash,
+      titleCard: {
+        title: 'Clash',
+        subtitle: 'Steel finds the light',
+        kind: 'clash',
+      },
+    });
+    setLocalTitleDismissed(null);
+    playScreenPunch();
+    void postTableMessage('GM', 'Steel clears the wood. Clash begins — claim your zone.');
+  };
+
+  const handleEndClash = () => {
+    persistVaultPatch({ clash: { active: false, combatants: [] } });
+    playWaxStamp();
+    void postTableMessage('Chronicle', 'Blades lower. The clash resolves.');
+  };
+
+  const handleLevelUpConfirm = async (next: CharacterSheet) => {
+    setActiveSheet(next);
+    setLevelUpOpen(false);
+    playWaxStamp();
+    if (currentPlayer?.id) {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        await supabase
+          .from('players')
+          .update({
+            max_hp: next.maxHp,
+            current_hp: Math.min(
+              next.maxHp,
+              (currentPlayer.current_hp ?? next.maxHp) + 4
+            ),
+            sheet_snapshot: sheetSnapshot(next),
+            avatar_class: `${next.className} L${next.level}`,
+          })
+          .eq('id', currentPlayer.id);
+        setCurrentPlayer((prev) =>
+          prev
+            ? {
+                ...prev,
+                max_hp: next.maxHp,
+                current_hp: Math.min(
+                  next.maxHp,
+                  (prev.current_hp ?? next.maxHp) + 4
+                ),
+                sheet_snapshot: sheetSnapshot(next),
+                avatar_class: `${next.className} L${next.level}`,
+              }
+            : prev
+        );
+      } catch (error) {
+        console.error('Level-up persist failed:', error);
+        setSyncNotice('Level sealed locally — sync will catch up.');
+      }
+    }
+    void postTableMessage(
+      'Chronicle',
+      `${next.name} rises to level ${next.level}. The vault marks the scar.`
+    );
+    persistVaultPatch({
+      titleCard: {
+        title: `Level ${next.level}`,
+        subtitle: `${next.name} — the legend deepens`,
+        kind: 'chapter',
+      },
+    });
+    setLocalTitleDismissed(null);
   };
 
   const recordPosition = useCallback((name: string, el: HTMLDivElement | null) => {
@@ -1223,7 +1641,21 @@ function GameRoom({ params }: { params: { code: string } }) {
   const tableArt = campaign?.tableArt ?? BOARD_TEXTURE;
   const mapArt = campaign?.mapArt ?? campaign?.coverArt ?? BOARD_TEXTURE;
   const tableMeta = readTableMeta(game?.state_data);
+  const vaultRoom = readVaultRoom(game?.state_data);
   const dressClass = campaign ? `campaign-dress-${campaign.id}` : '';
+  const sortedPlayers = [...players].sort((a, b) =>
+    String(a.created_at).localeCompare(String(b.created_at))
+  );
+  const isHost =
+    !!currentPlayer &&
+    sortedPlayers.length > 0 &&
+    sortedPlayers[0]?.id === currentPlayer.id;
+  const titleCard =
+    vaultRoom.titleCard &&
+    localTitleDismissed !==
+      `${vaultRoom.titleCard.title}|${vaultRoom.titleCard.subtitle}`
+      ? vaultRoom.titleCard
+      : null;
 
   const tokenPosFor = (player: PlayerEntity, index: number, isSelf: boolean) => {
     const saved = tableMeta.tokenPositions[player.user_name];
@@ -1254,6 +1686,47 @@ function GameRoom({ params }: { params: { code: string } }) {
         onDismiss={() => setFanfareEvents([])}
       />
 
+      <TitleCard
+        card={titleCard}
+        onDismiss={() => {
+          if (vaultRoom.titleCard) {
+            setLocalTitleDismissed(
+              `${vaultRoom.titleCard.title}|${vaultRoom.titleCard.subtitle}`
+            );
+          }
+          persistVaultPatch({ titleCard: null });
+        }}
+      />
+
+      <LevelUpRitual
+        open={levelUpOpen}
+        sheet={activeSheet}
+        onClose={() => setLevelUpOpen(false)}
+        onConfirm={(next) => {
+          void handleLevelUpConfirm(next);
+        }}
+      />
+
+      {isHost && (
+        <HostSatchel
+          open={hostOpen}
+          onClose={() => setHostOpen(false)}
+          reactive={reactive}
+          players={players}
+          hostSkipArbiter={vaultRoom.hostSkipArbiter}
+          onAdvanceClock={handleHostAdvanceClock}
+          onBumpHeat={handleHostBumpHeat}
+          onSpotlight={handlePassSpotlight}
+          onWhisperNpc={handleHostWhisperNpc}
+          onToggleSkipArbiter={() =>
+            persistVaultPatch({ hostSkipArbiter: !vaultRoom.hostSkipArbiter })
+          }
+          onInjectSetPiece={handleInjectSetPiece}
+          onStartClash={handleStartClash}
+          onEndClash={handleEndClash}
+        />
+      )}
+
       {/* Room gloom */}
       <div
         className="absolute inset-0 bg-cover bg-center opacity-38 parallax-drift plate-ink"
@@ -1270,6 +1743,17 @@ function GameRoom({ params }: { params: { code: string } }) {
         {sessionCode}
         {campaign ? ` · ${campaign.title}` : ''}
       </div>
+
+      {isHost && (
+        <button
+          type="button"
+          className="vault-host-fab"
+          onClick={() => setHostOpen((o) => !o)}
+          title="Host satchel"
+        >
+          Host
+        </button>
+      )}
 
       {/* Table props: mute bell + satchel pouch */}
       <div className="absolute top-2 right-3 z-30 flex items-end gap-3">
@@ -1363,6 +1847,12 @@ function GameRoom({ params }: { params: { code: string } }) {
             {diceBadge && (
               <DiceResultBadge sender={diceBadge.sender} result={diceBadge.result} />
             )}
+
+            <ClashHud
+              active={vaultRoom.clash.active}
+              combatants={vaultRoom.clash.combatants}
+              onZone={isHost ? handleClashZone : undefined}
+            />
           </div>
 
           <ReactiveStateStrip
@@ -1427,6 +1917,26 @@ function GameRoom({ params }: { params: { code: string } }) {
             </button>
           </div>
 
+          {vaultRoom.chapters[0] && (
+            <div className="vault-chapters">
+              <p className="vault-chapter-line">
+                Chapter — {vaultRoom.chapters[0].title}
+              </p>
+            </div>
+          )}
+
+          <BeatChoices
+            beats={vaultRoom.pendingBeats}
+            disabled={isGMLoading}
+            onChoose={handleBeatChoice}
+          />
+
+          <PendingChecks
+            checks={vaultRoom.pendingChecks}
+            disabled={isGMLoading}
+            onRoll={handlePendingCheck}
+          />
+
           <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-3 space-y-3">
             {visibleMessages.length === 0 && (
               <p className="ink-entry-body italic whitespace-pre-wrap">{narrative}</p>
@@ -1467,7 +1977,7 @@ function GameRoom({ params }: { params: { code: string } }) {
               void handleExecuteAction();
             }}
           >
-            <div className="dice-tray">
+            <div className={`dice-tray ${vaultRoom.pendingChecks.length ? 'dice-tray-lit' : ''}`}>
               {['1d20', '1d20+5', '2d6', '1d8'].map((expr) => (
                 <button
                   key={expr}
@@ -1543,7 +2053,17 @@ function GameRoom({ params }: { params: { code: string } }) {
                 <p className="text-[12px] text-[#e8b4b4] mt-1">
                   HP {activeHp.current}/{activeHp.max}
                   {activeSheet ? ` · AC ${activeSheet.armorClass}` : ''}
+                  {activeSheet ? ` · L${activeSheet.level}` : ''}
                 </p>
+                {activeSheet && (activeSheet.level || 1) < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setLevelUpOpen(true)}
+                    className="mt-1 text-[11px] italic text-[#f59e0b] hover:underline"
+                  >
+                    Level-up ritual →
+                  </button>
+                )}
               </div>
             </div>
             <button
