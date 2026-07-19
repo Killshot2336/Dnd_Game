@@ -1231,7 +1231,7 @@ function GameRoom({ params }: { params: { code: string } }) {
 
   return (
     <div
-      className={`min-h-screen tabletop-shell overflow-hidden antialiased select-none relative text-[#f3e6c8] ${dressClass}`}
+      className={`min-h-screen tabletop-shell overflow-hidden antialiased select-none relative text-[#f0e2c4] ${dressClass}`}
     >
       <canvas ref={canvasRef} className="absolute inset-0 z-50 pointer-events-none" />
 
@@ -1240,53 +1240,59 @@ function GameRoom({ params }: { params: { code: string } }) {
         onDismiss={() => setFanfareEvents([])}
       />
 
-      {/* Room atmosphere behind the table */}
+      {/* Room gloom */}
       <div
-        className="absolute inset-0 bg-cover bg-center opacity-40 ken-burns"
+        className="absolute inset-0 bg-cover bg-center opacity-35 ken-burns plate-ink"
         style={{ backgroundImage: `url(${mapArt})` }}
         aria-hidden
       />
-      <div className="absolute inset-0 bg-[#140e0a]/75" />
-      <div className="absolute inset-0 bg-gradient-to-t from-[#140e0a] via-transparent to-[#140e0a]/85" />
+      <div className="absolute inset-0 bg-[#120c08]/78" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#120c08] via-transparent to-[#120c08]/85" />
       <div className="absolute left-8 top-24 w-40 h-40 torch-glow" />
       <div className="absolute right-10 bottom-40 w-48 h-48 torch-glow" />
 
-      <div className="absolute top-4 left-4 z-30 session-seal text-[10px] sm:text-xs">
-        SEAL {sessionCode}
+      {/* Etched brass plaque — not a SaaS header */}
+      <div className="absolute top-3 left-3 z-30 session-plaque text-[10px] sm:text-xs">
+        {sessionCode}
         {campaign ? ` · ${campaign.title}` : ''}
       </div>
-      <div className="absolute top-3 right-4 z-30 flex items-center gap-2">
+
+      {/* Table props: mute bell + satchel pouch */}
+      <div className="absolute top-2 right-3 z-30 flex items-end gap-3">
         <button
           type="button"
           onClick={() => setSfxMuted((m) => !m)}
-          className="border border-[#8b5e34] px-3 py-2 font-display text-[10px] uppercase tracking-[0.2em] text-[#c4a574] bg-[#140e0a]/70"
-          title="Toggle table sounds"
+          className={`prop-bell ${sfxMuted ? 'prop-bell-muted' : ''}`}
+          title={sfxMuted ? 'Unmute the table' : 'Mute the table'}
+          aria-label={sfxMuted ? 'Unmute table sounds' : 'Mute table sounds'}
         >
-          {sfxMuted ? 'SFX Off' : 'SFX On'}
+          <span className="prop-bell-glyph block" />
         </button>
         <button
           type="button"
           onClick={() => setIsTrayOpen((open) => !open)}
-          className="wax-button px-4 py-2 text-[10px] uppercase tracking-[0.25em]"
+          className="prop-pouch"
+          title="Open your satchel"
+          aria-label="Open satchel"
         >
-          Satchel
+          <span className="prop-pouch-glyph block" />
         </button>
       </div>
 
       {syncNotice && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 parchment-panel px-4 py-1.5 text-[11px] max-w-[90vw]">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 sync-blot max-w-[90vw]">
           {syncNotice}
         </div>
       )}
 
-      <div className="relative z-10 h-screen max-h-screen grid grid-rows-[minmax(0,1.2fr)_minmax(0,0.8fr)] gap-3 p-3 sm:p-5">
-        {/* 2.5D FIRST-PERSON TABLE */}
-        <section className="board-frame relative rounded-sm overflow-hidden min-h-0 fp-table-stage">
+      <div className="relative z-10 room-split">
+        {/* 2.5D TABLE */}
+        <section className="board-frame relative overflow-hidden min-h-0 fp-table-stage">
           <div className="absolute inset-0 bg-[#1a100c]" />
           <div
             className="absolute inset-[-8%_-5%_8%] fp-table-plane fp-table-felt"
             style={{
-              backgroundImage: `linear-gradient(180deg, rgba(20,12,8,0.35), rgba(10,6,4,0.65)), url(${tableArt})`,
+              backgroundImage: `linear-gradient(180deg, rgba(20,12,8,0.4), rgba(10,6,4,0.7)), url(${tableArt})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
             }}
@@ -1294,38 +1300,32 @@ function GameRoom({ params }: { params: { code: string } }) {
             <div className="absolute left-1/4 top-1/3 w-28 h-28 fp-lantern" />
             <div className="absolute right-1/4 top-1/4 w-24 h-24 fp-lantern" />
 
-            {/* GM at the far end of the table */}
+            {/* GM screen at far end */}
             <div
-              className={`absolute top-[6%] left-1/2 -translate-x-1/2 z-20 w-[min(70%,18rem)] fp-gm-seat dm-screen rounded-sm p-2 sm:p-3 flex flex-col items-center gap-2 text-center ${
-                isGMLoading ? 'gm-breathe' : 'animate-float'
+              className={`absolute top-[5%] left-1/2 -translate-x-1/2 z-20 w-[min(72%,17rem)] fp-gm-seat dm-screen p-2 sm:p-3 flex flex-col items-center gap-2 text-center ${
+                isGMLoading ? 'gm-breathe' : ''
               }`}
             >
-              <div className="relative w-14 h-14 sm:w-16 sm:h-16 overflow-hidden border-2 border-[#c4a574] rounded-sm">
+              <div className="relative w-14 h-16 sm:w-16 sm:h-[4.5rem] overflow-hidden dm-screen-art shrink-0">
                 <Image
                   src={campaign?.gmScreenArt ?? GM_PORTRAIT}
                   alt="Game Master"
                   fill
                   sizes="64px"
-                  className="object-cover"
+                  className="object-cover plate-ink"
                   priority
                 />
               </div>
               <div className="min-w-0 px-1">
-                <p className="font-display text-[9px] uppercase tracking-[0.35em] text-[#c4a574]">
-                  Far end · GM
-                </p>
-                <h2 className="font-display text-sm sm:text-base font-black text-[#f3e6c8]">
-                  Void Arbiter
-                </h2>
+                <p className="text-[11px] italic text-[#b8965c]">The Arbiter</p>
                 <p className="text-[11px] text-[#d6c4a1] line-clamp-2 italic leading-snug mt-0.5">
                   {isGMLoading
-                    ? 'The Arbiter leans across the wood…'
+                    ? 'Leans across the wood…'
                     : narrative}
                 </p>
               </div>
             </div>
 
-            {/* Draggable party tokens */}
             {players.map((player, index) => {
               const isSelf = player.user_name === activeName;
               return (
@@ -1357,69 +1357,65 @@ function GameRoom({ params }: { params: { code: string } }) {
           />
         </section>
 
-        {/* PARCHMENT CHRONICLE — bottom split */}
-        <section className="parchment-panel min-h-0 rounded-sm flex flex-col overflow-hidden">
-          <div className="px-4 py-2 border-b border-[#8b5e34]/60 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-display text-sm font-bold tracking-wide text-[#2c1810]">
-              {campaign ? `${campaign.title} Chronicle` : 'Campaign Chronicle'}
-            </h3>
-            <div className="flex items-center gap-2">
-              {lastSpeaker && (
-                <span className="text-[10px] uppercase tracking-wider text-[#5c3a21]">
-                  Last spoke · {lastSpeaker}
-                </span>
-              )}
-              {isGMLoading && (
-                <span className="text-[11px] italic text-[#7f1d1d]">Ink still wet…</span>
-              )}
-            </div>
+        {/* BOOK PAGE resting on the near edge */}
+        <section className="parchment-panel chronicle-book min-h-0 flex flex-col overflow-hidden">
+          <div className="chronicle-margin px-4 py-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="italic">
+              {campaign ? `${campaign.title}` : 'The chronicle'}
+              {lastSpeaker ? ` · last voice: ${lastSpeaker}` : ''}
+            </p>
+            {isGMLoading && (
+              <span className="italic text-[#7f1d1d]">Ink still wet…</span>
+            )}
           </div>
 
-          {/* Soft spotlight bar */}
-          <div className="spotlight-bar border-b border-[#8b5e34]/40 px-3 py-1.5 flex flex-wrap items-center gap-2">
-            <span className="font-display text-[10px] uppercase tracking-[0.2em] text-[#7f1d1d]">
-              Spotlight
-            </span>
+          {/* Lantern seats = spotlight, ribbon = recap */}
+          <div className="px-3 py-1.5 flex flex-wrap items-center gap-2 border-b border-[#8b5e34]/30">
+            <span className="text-[11px] italic text-[#5c3a21] mr-1">Who holds the lantern</span>
             <button
               type="button"
               onClick={() => handlePassSpotlight(null)}
-              className={`text-[10px] uppercase tracking-wider px-2 py-1 border ${
-                !tableMeta.spotlight
-                  ? 'border-[#f59e0b] text-[#7f1d1d]'
-                  : 'border-[#8b5e34] text-[#5c3a21]'
-              }`}
+              className="flex items-center gap-1"
+              title="Open table"
             >
-              Open
+              <span
+                className={`lantern-seat ${!tableMeta.spotlight ? '' : 'lantern-seat-dim'}`}
+              />
+              <span className="text-[11px] italic text-[#5c3a21]">open</span>
             </button>
-            {players.map((player) => (
-              <button
-                key={`spot-${player.id}`}
-                type="button"
-                onClick={() => handlePassSpotlight(player.user_name)}
-                className={`text-[10px] uppercase tracking-wider px-2 py-1 border ${
-                  tableMeta.spotlight?.toLowerCase() ===
-                  player.user_name.toLowerCase()
-                    ? 'border-[#f59e0b] text-[#7f1d1d] bg-[#f59e0b]/15'
-                    : 'border-[#8b5e34] text-[#5c3a21]'
-                }`}
-              >
-                {player.user_name}
-              </button>
-            ))}
+            {players.map((player) => {
+              const on =
+                tableMeta.spotlight?.toLowerCase() ===
+                player.user_name.toLowerCase();
+              return (
+                <button
+                  key={`spot-${player.id}`}
+                  type="button"
+                  onClick={() => handlePassSpotlight(player.user_name)}
+                  className="flex items-center gap-1"
+                  title={`Spotlight ${player.user_name}`}
+                >
+                  <span className={`lantern-seat ${on ? '' : 'lantern-seat-dim'}`} />
+                  <span className="text-[11px] italic text-[#2a160e]">
+                    {player.user_name}
+                  </span>
+                </button>
+              );
+            })}
             <button
               type="button"
               onClick={handleRecap}
-              className="ml-auto text-[10px] uppercase tracking-wider px-2 py-1 border border-[#8b5e34] text-[#5c3a21]"
+              className="prop-ribbon ml-auto"
+              title="Turn back a page — recap"
+              aria-label="Session recap"
             >
-              Recap
+              <span className="prop-ribbon-glyph block" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-3 space-y-3">
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-3 space-y-3">
             {visibleMessages.length === 0 && (
-              <p className="text-sm italic text-[#5c3a21] whitespace-pre-wrap">
-                {narrative}
-              </p>
+              <p className="ink-entry-body italic whitespace-pre-wrap">{narrative}</p>
             )}
             {visibleMessages.map((message) => {
               const isGm = message?.sender === 'GM';
@@ -1429,23 +1425,21 @@ function GameRoom({ params }: { params: { code: string } }) {
               return (
                 <div key={`${message.id}-${message.created_at}`} className="ink-line">
                   <p
-                    className={`font-display text-[11px] uppercase tracking-[0.2em] ${
-                      isGm || isChronicle
-                        ? 'text-[#9f1239]'
-                        : whisper
-                          ? 'text-[#1d4ed8]'
-                          : roll
-                            ? 'text-[#b45309]'
-                            : 'text-[#5c3a21]'
-                    }`}
+                    className={`ink-entry-name ${
+                      isGm || isChronicle ? 'ink-entry-gm' : ''
+                    } ${whisper ? 'text-[#1e3a5f]' : ''} ${roll ? 'text-[#8b4510]' : ''}`}
                   >
                     {whisper
-                      ? `Whisper · ${whisper.from} → ${whisper.to}`
-                      : message?.sender ?? 'Unknown'}
+                      ? `Passed note — ${whisper.from} to ${whisper.to}`
+                      : roll
+                        ? message?.content?.replace(/^🎲\s*/, '') ?? ''
+                        : message?.sender ?? 'Unknown'}
                   </p>
-                  <p className="text-[15px] leading-relaxed text-[#2c1810] whitespace-pre-wrap">
-                    {whisper ? whisper.body : message?.content ?? ''}
-                  </p>
+                  {!roll && (
+                    <p className="ink-entry-body whitespace-pre-wrap">
+                      {whisper ? whisper.body : message?.content ?? ''}
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -1453,21 +1447,22 @@ function GameRoom({ params }: { params: { code: string } }) {
           </div>
 
           <form
-            className="border-t border-[#8b5e34]/60 px-4 py-3 space-y-2 bg-[#dfc4a0]/40"
+            className="quill-well px-4 py-3 space-y-2"
             onSubmit={(event) => {
               event.preventDefault();
               void handleExecuteAction();
             }}
           >
-            <div className="flex flex-wrap gap-2">
+            <div className="dice-tray">
               {['1d20', '1d20+5', '2d6', '1d8'].map((expr) => (
                 <button
                   key={expr}
                   type="button"
                   onClick={() => handleQuickRoll(expr)}
-                  className="font-mono text-[11px] px-2 py-1 border border-[#8b5e34] text-[#5c3a21] hover:bg-[#c4a574]/30"
+                  className="bone-die"
+                  title={`Roll ${expr}`}
                 >
-                  /roll {expr}
+                  {expr.replace('1d', 'd')}
                 </button>
               ))}
             </div>
@@ -1481,20 +1476,20 @@ function GameRoom({ params }: { params: { code: string } }) {
                 }
               }}
               rows={2}
-              placeholder="Deed, /roll 1d20+5, /w Name secret, /spotlight Name…"
-              className="quill-input w-full text-[15px] px-1 py-2"
+              placeholder="Write your deed… or cast a die from the tray"
+              className="quill-input w-full text-[16px] px-1 py-2"
               disabled={isGMLoading}
             />
             <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] italic text-[#5c3a21]">
-                Enter seals · drag tokens on the wood
+              <p className="text-[12px] italic text-[#5c3a21]">
+                Enter seals the ink · drag the miniatures
               </p>
               <button
                 type="submit"
                 disabled={!inputMessage.trim() || isGMLoading}
-                className="wax-button px-5 py-2 text-[11px] uppercase tracking-[0.2em]"
+                className="wax-button px-5 py-2 text-[11px]"
               >
-                {isGMLoading ? 'Casting…' : 'Seal & Throw'}
+                {isGMLoading ? '…' : 'Seal'}
               </button>
             </div>
           </form>
@@ -1503,26 +1498,35 @@ function GameRoom({ params }: { params: { code: string } }) {
 
       {/* Leather satchel / character sheet */}
       <aside
-        className={`fixed inset-y-0 right-0 w-full sm:w-[380px] z-[60] transform transition-transform duration-500 ease-out parchment-panel border-l-4 border-[#5c3a21] ${
+        className={`fixed inset-y-0 right-0 w-full sm:w-[380px] z-[60] transform transition-transform duration-500 ease-out sheet-leather ${
           isTrayOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         <div className="h-full overflow-y-auto custom-scrollbar p-5 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="relative w-16 h-16 rounded-full overflow-hidden token-ring shrink-0">
-                <Image src={selfPortrait} alt="" fill sizes="64px" className="object-cover" />
+              <div
+                className="relative w-14 h-[4.5rem] overflow-hidden mini-figure shrink-0"
+                style={{ borderRadius: '40% 40% 18% 18% / 28% 28% 12% 12%' }}
+              >
+                <Image
+                  src={selfPortrait}
+                  alt=""
+                  fill
+                  sizes="64px"
+                  className="object-cover object-top plate-ink"
+                />
               </div>
               <div>
-                <h2 className="font-display text-xl font-black text-[#2c1810]">
+                <h2 className="font-display text-xl text-[#f0e2c4]">
                   {activeSheet?.name ?? currentPlayer?.user_name ?? 'Wanderer'}
                 </h2>
-                <p className="text-[11px] uppercase tracking-[0.2em] text-[#5c3a21]">
+                <p className="text-[12px] italic text-[#b8965c]">
                   {activeSheet
                     ? `${activeSheet.race} ${activeSheet.className}`
                     : currentPlayer?.avatar_class ?? 'Adventurer'}
                 </p>
-                <p className="text-[12px] text-[#7f1d1d] mt-1">
+                <p className="text-[12px] text-[#e8b4b4] mt-1">
                   HP {activeHp.current}/{activeHp.max}
                   {activeSheet ? ` · AC ${activeSheet.armorClass}` : ''}
                 </p>
@@ -1531,22 +1535,22 @@ function GameRoom({ params }: { params: { code: string } }) {
             <button
               type="button"
               onClick={() => setIsTrayOpen(false)}
-              className="font-display text-[10px] uppercase tracking-widest text-[#5c3a21] border border-[#8b5e34] px-3 py-2"
+              className="prop-pouch"
+              aria-label="Close satchel"
+              title="Close satchel"
             >
-              Close
+              <span className="prop-pouch-glyph block scale-75 origin-top-right" />
             </button>
           </div>
 
           {(activeSheet?.seed || currentPlayer?.seed) && (
-            <div className="border border-[#8b5e34] px-3 py-2 bg-[#dfc4a0]/40">
-              <p className="font-display text-[10px] uppercase tracking-[0.25em] text-[#5c3a21]">
-                Character Seed
-              </p>
-              <p className="font-mono text-sm tracking-[0.2em] text-[#2c1810]">
+            <div className="border border-[#8b5e34] px-3 py-2 bg-black/20">
+              <p className="text-[11px] italic text-[#b8965c]">Legend seed</p>
+              <p className="font-display text-sm tracking-[0.15em] text-[#f0e2c4]">
                 {activeSheet?.seed ?? currentPlayer?.seed}
               </p>
-              <p className="text-[11px] italic text-[#5c3a21] mt-1">
-                Share this seed to load the same legend at another table.
+              <p className="text-[11px] italic text-[#a89070] mt-1">
+                Carry this seed to another table.
               </p>
             </div>
           )}
@@ -1557,45 +1561,37 @@ function GameRoom({ params }: { params: { code: string } }) {
                 key={tab}
                 type="button"
                 onClick={() => setSheetTab(tab)}
-                className={`flex-1 font-display text-[10px] uppercase tracking-[0.2em] py-2 border ${
-                  sheetTab === tab
-                    ? 'border-[#9f1239] bg-[#9f1239]/10 text-[#7f1d1d]'
-                    : 'border-[#8b5e34] text-[#5c3a21]'
+                className={`flex-1 sheet-tab ${
+                  sheetTab === tab ? 'sheet-tab-active' : ''
                 }`}
               >
-                {tab}
+                {tab === 'stats' ? 'Body' : tab === 'soul' ? 'Soul' : 'Gear'}
               </button>
             ))}
           </div>
 
           {sheetTab === 'stats' && (
             <>
-              <div className="grid grid-cols-3 gap-2 text-center border border-[#8b5e34] p-3 bg-[#dfc4a0]/40">
+              <div className="grid grid-cols-3 gap-2">
                 {(
                   ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as Array<keyof AbilityScores>
                 ).map((stat) => (
-                  <div key={stat}>
-                    <div className="font-display text-[10px] tracking-widest text-[#5c3a21]">
-                      {stat}
-                    </div>
-                    <div className="font-display text-lg font-black text-[#2c1810]">
+                  <div key={stat} className="sheet-stat-box">
+                    <div className="text-[10px] text-[#b8965c]">{stat}</div>
+                    <div className="font-display text-lg text-[#f0e2c4]">
                       {activeSheet?.stats?.[stat] ?? safeStat(currentPlayer, stat)}
                     </div>
                   </div>
                 ))}
               </div>
               {activeSheet && (
-                <div className="text-[12px] text-[#2c1810] space-y-1">
+                <div className="text-[12px] text-[#e4d0a2] space-y-1 italic">
                   <p>
-                    <span className="font-display uppercase tracking-wider text-[#5c3a21]">
-                      Skills:{' '}
-                    </span>
+                    <span className="not-italic text-[#b8965c]">Skills — </span>
                     {activeSheet.skills.join(', ')}
                   </p>
                   <p>
-                    <span className="font-display uppercase tracking-wider text-[#5c3a21]">
-                      Features:{' '}
-                    </span>
+                    <span className="not-italic text-[#b8965c]">Features — </span>
                     {activeSheet.features.join(', ')}
                   </p>
                 </div>
@@ -1604,21 +1600,21 @@ function GameRoom({ params }: { params: { code: string } }) {
           )}
 
           {sheetTab === 'soul' && (
-            <div className="space-y-3 text-[13px] text-[#2c1810] leading-relaxed">
+            <div className="space-y-3 text-[13px] text-[#e4d0a2] leading-relaxed italic">
               <p>
-                <span className="font-display uppercase tracking-wider text-[#5c3a21] block text-[10px]">
+                <span className="not-italic text-[#b8965c] block text-[11px]">
                   Appearance
                 </span>
                 {activeSheet?.appearance || currentPlayer?.sheet_snapshot?.appearance || '—'}
               </p>
               <p>
-                <span className="font-display uppercase tracking-wider text-[#5c3a21] block text-[10px]">
+                <span className="not-italic text-[#b8965c] block text-[11px]">
                   Backstory
                 </span>
                 {activeSheet?.backstory || currentPlayer?.sheet_snapshot?.backstory || '—'}
               </p>
               <p>
-                <span className="font-display uppercase tracking-wider text-[#5c3a21] block text-[10px]">
+                <span className="not-italic text-[#b8965c] block text-[11px]">
                   Ideal / Bond / Flaw
                 </span>
                 {activeSheet?.ideals || '—'} / {activeSheet?.bonds || '—'} /{' '}
@@ -1630,20 +1626,18 @@ function GameRoom({ params }: { params: { code: string } }) {
           {sheetTab === 'gear' && (
             <div className="space-y-3">
               {activeSheet?.equipment?.length ? (
-                <ul className="text-[13px] text-[#2c1810] list-disc pl-5 space-y-1">
+                <ul className="text-[13px] text-[#e4d0a2] list-disc pl-5 space-y-1 italic">
                   {activeSheet.equipment.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
               ) : null}
-              <p className="font-display text-xs uppercase tracking-[0.25em] text-[#5c3a21]">
-                Reliquary Skins
-              </p>
+              <p className="text-[11px] italic text-[#b8965c]">Reliquary</p>
               <div className="grid grid-cols-3 gap-3">
                 {INVENTORY_SLOTS.map((slot) => (
                   <div
                     key={slot.id}
-                    className="inventory-socket aspect-square border-2 border-[#8b5e34] bg-[#2c1810]/10 flex items-center justify-center p-3"
+                    className="inventory-socket aspect-square border border-[#8b5e34] bg-black/25 flex items-center justify-center p-3"
                     title={slot.label}
                     aria-label={slot.label}
                   >
@@ -1653,7 +1647,7 @@ function GameRoom({ params }: { params: { code: string } }) {
                       width={72}
                       height={72}
                       unoptimized
-                      className="inventory-glyph w-full h-full object-contain opacity-35 transition-all duration-300"
+                      className="inventory-glyph w-full h-full object-contain opacity-40 transition-all duration-300"
                     />
                   </div>
                 ))}
@@ -1667,7 +1661,7 @@ function GameRoom({ params }: { params: { code: string } }) {
         <button
           type="button"
           aria-label="Close satchel"
-          className="fixed inset-0 bg-black/50 z-[55]"
+          className="fixed inset-0 bg-black/55 z-[55]"
           onClick={() => setIsTrayOpen(false)}
         />
       )}

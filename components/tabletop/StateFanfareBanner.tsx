@@ -13,27 +13,35 @@ export default function StateFanfareBanner({
   const primary = events[0];
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[70] w-[min(92vw,28rem)] fanfare-pop">
+    <div className="fixed top-[4.5rem] left-1/2 -translate-x-1/2 z-[70] w-[min(92vw,26rem)] wax-fanfare">
       <button
         type="button"
         onClick={onDismiss}
-        className="w-full text-left parchment-panel border-[#9f1239] px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.65)]"
+        className="w-full flex items-start gap-3 text-left parchment-panel px-3 py-3"
+        style={{
+          clipPath: 'polygon(2% 0, 100% 3%, 98% 100%, 0 96%)',
+          border: 'none',
+          boxShadow: '0 14px 36px rgba(0,0,0,0.6)',
+        }}
       >
-        <p className="font-display text-[10px] uppercase tracking-[0.35em] text-[#9f1239]">
-          The world answers
-        </p>
-        <p className="font-display text-base font-black text-[#2c1810] mt-1">
-          {primary.title}
-        </p>
-        <p className="text-sm italic text-[#5c3a21] mt-0.5">{primary.detail}</p>
-        {events.length > 1 && (
-          <p className="text-[11px] text-[#7f1d1d] mt-2">
-            +{events.length - 1} more shift{events.length > 2 ? 's' : ''} on the board
+        <div className="wax-seal-disk" aria-hidden>
+          World
+          <br />
+          answers
+        </div>
+        <div className="min-w-0 pt-1">
+          <p className="font-display text-base text-[#2a160e] leading-snug">
+            {primary.title}
           </p>
-        )}
-        <p className="text-[10px] uppercase tracking-widest text-[#8b5e34] mt-2">
-          Tap to dismiss
-        </p>
+          <p className="text-sm italic text-[#5c3a21] mt-1">{primary.detail}</p>
+          {events.length > 1 && (
+            <p className="text-[12px] text-[#7f1d1d] mt-2 italic">
+              …and {events.length - 1} more mark
+              {events.length > 2 ? 's' : ''} on the page
+            </p>
+          )}
+          <p className="text-[11px] text-[#8b5e34] mt-2 italic">Press the seal to continue</p>
+        </div>
       </button>
     </div>
   );

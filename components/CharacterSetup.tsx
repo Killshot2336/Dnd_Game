@@ -188,8 +188,8 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
 
       <div className="parchment-panel relative max-w-lg w-full p-5 sm:p-7 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center gap-4">
-          <div className="relative w-16 h-16 rounded-full overflow-hidden token-ring shrink-0">
-            <Image src={previewPortrait} alt="" fill sizes="64px" className="object-cover" />
+          <div className="relative w-16 h-20 overflow-hidden mini-figure shrink-0" style={{ borderRadius: '40% 40% 18% 18% / 28% 28% 12% 12%' }}>
+            <Image src={previewPortrait} alt="" fill sizes="64px" className="object-cover object-top plate-ink" />
           </div>
           <div>
             <h2 className="font-display text-xl font-black text-[#2c1810]">Legend Forge</h2>
@@ -263,7 +263,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
                   className="text-left border-2 border-[#8b5e34] px-3 py-3 hover:bg-[#dfc4a0]/45"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="relative w-12 h-12 rounded-full overflow-hidden token-ring shrink-0">
+                    <div className="relative w-12 h-14 overflow-hidden mini-figure shrink-0" style={{ borderRadius: '40% 40% 18% 18% / 28% 28% 12% 12%' }}>
                       <Image
                         src={portraitForPlayer(item.name, item.portraitKey)}
                         alt=""
