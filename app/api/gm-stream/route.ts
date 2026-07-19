@@ -2,35 +2,52 @@ import { NextResponse } from 'next/server';
 import { sanitizeHistory } from '@/lib/game-guards';
 import type { HistoryMessage } from '@/types/database';
 
-interface OpenRouterChoice {
-  message?: {
-    content?: string | Array<{ type?: string; text?: string }>;
-  };
+interface GeminiPart {
+  text?: string;
 }
 
-interface OpenRouterResponse {
-  choices?: OpenRouterChoice[];
+interface GeminiContent {
+  role: 'user' | 'model';
+  parts: GeminiPart[];
+}
+
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: GeminiPart[];
+    };
+    finishReason?: string;
+  }>;
+  promptFeedback?: {
+    blockReason?: string;
+  };
   error?: {
     message?: string;
+    status?: string;
   };
 }
 
-function extractReplyText(data: OpenRouterResponse): string | null {
-  const content = data.choices?.[0]?.message?.content;
-  if (typeof content === 'string') {
-    const trimmed = content.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
-  if (Array.isArray(content)) {
-    const joined = content
-      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
-      .join('')
-      .trim();
-    return joined.length > 0 ? joined : null;
-  }
+function getGeminiApiKey(): string | null {
+  const key =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    process.env.GOOGLE_API_KEY;
+  if (!key || !key.trim()) return null;
+  return key.trim();
+}
 
-  return null;
+function extractReplyText(data: GeminiResponse): string | null {
+  const parts = data.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts) || parts.length === 0) return null;
+
+  const joined = parts
+    .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+    .join('')
+    .trim();
+
+  return joined.length > 0 ? joined : null;
 }
 
 function reconstructPayload(raw: unknown): {
@@ -64,8 +81,44 @@ function reconstructPayload(raw: unknown): {
   return { playerInput, sender, history };
 }
 
+/** Gemini requires strict user/model alternation. */
+function buildGeminiContents(
+  history: HistoryMessage[],
+  sender: string,
+  playerInput: string
+): GeminiContent[] {
+  const contents: GeminiContent[] = [];
+
+  const push = (role: 'user' | 'model', text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const last = contents[contents.length - 1];
+    if (last && last.role === role) {
+      last.parts[0].text = `${last.parts[0].text ?? ''}\n${trimmed}`;
+      return;
+    }
+    contents.push({ role, parts: [{ text: trimmed }] });
+  };
+
+  for (const message of history) {
+    const role = message.sender === 'GM' ? 'model' : 'user';
+    push(role, `${message.sender}: ${message.content}`);
+  }
+
+  push('user', `${sender}: ${playerInput}`);
+
+  // Gemini chats must start with a user turn.
+  if (contents.length === 0 || contents[0].role !== 'user') {
+    contents.unshift({
+      role: 'user',
+      parts: [{ text: 'The party sits at the table. Begin the scene.' }],
+    });
+  }
+
+  return contents;
+}
+
 function publicErrorReply(fallback: string): NextResponse {
-  // Never echo upstream auth/provider secrets into the client payload.
   return NextResponse.json({ reply: fallback });
 }
 
@@ -80,11 +133,6 @@ export async function POST(req: Request) {
 
     const { playerInput, sender, history } = reconstructPayload(rawBody);
 
-    const contextHistory = history.map((message) => ({
-      role: message.sender === 'GM' ? ('assistant' as const) : ('user' as const),
-      content: `${message.sender}: ${message.content}`,
-    }));
-
     const systemInstruction = `[CAMPAIGN SETUP]
 
 * Active Party Members: Edward, Jamie, and Aden.
@@ -97,65 +145,83 @@ export async function POST(req: Request) {
 3. CONCISE GAME FLOW: Keep turn descriptions tight and punchy (under 120 words). End every response with a distinct mechanical prompt or a sharp question directed at one specific player to keep turn order moving.
 4. TABLE MECHANICS: Explicitly prompt players to report a d20 dice roll when taking major risks. Turn roll failures into hilarious, catastrophic events rather than dead ends.`;
 
-    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
-    if (!openRouterApiKey) {
-      console.error('OPENROUTER_API_KEY missing in server environment');
+    const geminiApiKey = getGeminiApiKey();
+    if (!geminiApiKey) {
+      console.error('GEMINI_API_KEY missing in server environment');
       return publicErrorReply(
-        '[System Error: Missing OpenRouter Authentication Key in Backend Context]'
+        '[System Error: Missing Gemini API Key in Backend Context. Add GEMINI_API_KEY from Google AI Studio.]'
       );
     }
 
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      GEMINI_MODEL
+    )}:generateContent`;
+
+    const contents = buildGeminiContents(history, sender, playerInput);
+
     let response: Response;
     try {
-      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${openRouterApiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
-          'X-Title': 'Voidline VTT',
+          'x-goog-api-key': geminiApiKey,
         },
         body: JSON.stringify({
-          model: 'gryphe/mythomax-l2-13b',
-          messages: [
-            { role: 'system', content: systemInstruction },
-            ...contextHistory,
-            { role: 'user', content: `${sender}: ${playerInput}` },
+          systemInstruction: {
+            parts: [{ text: systemInstruction }],
+          },
+          contents,
+          generationConfig: {
+            temperature: 0.85,
+            maxOutputTokens: 250,
+          },
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
           ],
-          temperature: 0.85,
-          max_tokens: 250,
         }),
       });
     } catch (networkError) {
-      console.error('OpenRouter network failure:', networkError);
+      console.error('Gemini network failure:', networkError);
       return publicErrorReply(
         'The reality engine lost signal mid-cast. Drop that unhinged action on me again.'
       );
     }
 
-    let data: OpenRouterResponse = {};
+    let data: GeminiResponse = {};
     try {
-      data = (await response.json()) as OpenRouterResponse;
+      data = (await response.json()) as GeminiResponse;
     } catch (parseError) {
-      console.error('OpenRouter JSON parse failure:', parseError);
+      console.error('Gemini JSON parse failure:', parseError);
       return publicErrorReply(
         'The simulation warped into static. Try that crazy action one more time.'
       );
     }
 
     if (!response.ok) {
-      // Log server-side only; strip provider auth details from client replies.
-      console.error('OpenRouter upstream rejection', {
+      console.error('Gemini upstream rejection', {
         status: response.status,
-        message: data.error?.message ? '[redacted-provider-message]' : 'none',
+        statusText: data.error?.status || 'none',
       });
       return publicErrorReply(
         'The reality engine cracked. Drop that unhinged action on me again.'
       );
     }
 
+    if (data.promptFeedback?.blockReason) {
+      console.error('Gemini prompt blocked', { reason: data.promptFeedback.blockReason });
+      return publicErrorReply(
+        'The void hiccuped on that beat. Rephrase the chaos and fire again.'
+      );
+    }
+
     const replyText = extractReplyText(data);
     if (!replyText) {
+      const finishReason = data.candidates?.[0]?.finishReason;
+      console.error('Gemini empty candidate', { finishReason: finishReason || 'none' });
       return publicErrorReply(
         'The simulation warped into static. Try that crazy action one more time.'
       );
