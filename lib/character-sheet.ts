@@ -32,6 +32,15 @@ export interface CharacterSheet {
   speed: number;
 }
 
+export function abilityModifier(score: number): number {
+  return Math.floor((Number(score) - 10) / 2);
+}
+
+export function formatModifier(score: number): string {
+  const mod = abilityModifier(score);
+  return mod >= 0 ? `+${mod}` : String(mod);
+}
+
 const SEED_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function generateCharacterSeed(): string {
