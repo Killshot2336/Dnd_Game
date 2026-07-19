@@ -7,6 +7,7 @@ interface Props {
   campaignTitle?: string | null;
 }
 
+/** Etched brass gauges on the table rail — not a SaaS strip. */
 export default function ReactiveStateStrip({ state, campaignTitle }: Props) {
   if (!state) return null;
 
@@ -17,13 +18,15 @@ export default function ReactiveStateStrip({ state, campaignTitle }: Props) {
 
   return (
     <div className="absolute bottom-2 left-2 right-2 z-20 pointer-events-none">
-      <div className="brass-plaque mx-auto max-w-3xl px-3 py-2">
+      <div className="brass-plaque v3-gauge-strip mx-auto max-w-3xl px-3 py-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
           {campaignTitle && (
-            <span className="font-display text-[#f0e2c4]">{campaignTitle}</span>
+            <span className="font-display text-[#f0e2c4] tracking-wide">
+              {campaignTitle}
+            </span>
           )}
           {heat.map(([id, value]) => (
-            <span key={id} className="italic text-[#b8965c]">
+            <span key={id} className="italic text-[color:var(--v3-brass)]">
               {id.replace(/_/g, ' ')}{' '}
               <span className="not-italic text-[#f0e2c4]">{value}</span>
             </span>

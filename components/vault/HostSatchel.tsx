@@ -45,8 +45,8 @@ export default function HostSatchel({
     <div className="vault-host-panel" role="dialog" aria-label="Host satchel">
       <div className="vault-host-head">
         <div>
-          <p className="text-[11px] italic text-[#b8965c]">Host satchel</p>
-          <h3 className="font-display text-lg text-[#f0e2c4]">First seat tools</h3>
+          <p className="text-[11px] italic text-[#b8965c]">Host folio</p>
+          <h3 className="font-display text-lg text-[#f0e2c4]">Leather tools</h3>
         </div>
         <button type="button" className="text-[12px] italic text-[#b8965c]" onClick={onClose}>
           Close

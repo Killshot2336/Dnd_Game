@@ -92,9 +92,13 @@ import {
 import {
   playDiceClack,
   playFanfareTick,
+  playLanternPass,
+  playPageTurn,
   playScreenPunch,
+  playSteelScrape,
   playWaxStamp,
   playWhisperRustle,
+  duckAmbientForSpeech,
   setTableSfxMuted,
 } from '@/lib/table-sfx';
 import {
@@ -189,6 +193,9 @@ function GameRoom({ params }: { params: { code: string } }) {
   const [hostOpen, setHostOpen] = useState(false);
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [localTitleDismissed, setLocalTitleDismissed] = useState<string | null>(null);
+  const [inkBleed, setInkBleed] = useState(false);
+  const [clashBang, setClashBang] = useState(false);
+  const [stampPulse, setStampPulse] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
@@ -203,6 +210,7 @@ function GameRoom({ params }: { params: { code: string } }) {
   const reactivePrevRef = useRef<ReactiveCampaignState | null>(null);
   const openingLockRef = useRef(false);
   const coldOpenLockRef = useRef(false);
+  const lastInkMsgRef = useRef<string | null>(null);
 
   useEffect(() => {
     currentPlayerNameRef.current = currentPlayer?.user_name ?? null;
@@ -590,6 +598,16 @@ function GameRoom({ params }: { params: { code: string } }) {
 
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    const key = `${last?.id ?? ''}-${last?.created_at ?? ''}`;
+    if (last?.sender === 'GM' && key !== lastInkMsgRef.current) {
+      lastInkMsgRef.current = key;
+      setInkBleed(true);
+      playPageTurn();
+      duckAmbientForSpeech(2000);
+      window.setTimeout(() => setInkBleed(false), 800);
+    }
   }, [messages, isGMLoading]);
 
   // Reactive state fanfare — loud when the world moves
@@ -1341,6 +1359,9 @@ function GameRoom({ params }: { params: { code: string } }) {
           };
         }
         nextStateData = writeVaultRoom(nextStateData, { clash });
+        playSteelScrape();
+        setClashBang(true);
+        window.setTimeout(() => setClashBang(false), 500);
       }
 
       const supabase = getSupabaseBrowserClient();
@@ -1557,7 +1578,7 @@ function GameRoom({ params }: { params: { code: string } }) {
 
   const handlePassSpotlight = (name: string | null) => {
     persistTablePatch({ spotlight: name });
-    playWaxStamp();
+    playLanternPass();
     void postTableMessage('GM', formatSpotlightMessage(name));
   };
 
@@ -1701,7 +1722,10 @@ function GameRoom({ params }: { params: { code: string } }) {
       },
     });
     setLocalTitleDismissed(null);
+    playSteelScrape();
     playScreenPunch();
+    setClashBang(true);
+    window.setTimeout(() => setClashBang(false), 500);
     void postTableMessage('GM', 'Steel clears the wood. Clash begins — claim your zone.');
   };
 
@@ -1884,10 +1908,15 @@ function GameRoom({ params }: { params: { code: string } }) {
       muted={sfxMuted}
     >
     <div
-      className={`min-h-screen overflow-hidden antialiased select-none relative ${
+      className={`min-h-screen overflow-hidden antialiased select-none relative v3-chamber ${
         screenPunch ? 'screen-punch' : ''
-      }`}
+      } ${clashBang ? 'v3-clash-bang' : ''}`}
     >
+      <div className="v3-chamber-wall" aria-hidden />
+      <div className="v3-sconce v3-sconce-left" aria-hidden />
+      <div className="v3-sconce v3-sconce-right" aria-hidden />
+      <div className="v3-sconce v3-sconce-far" aria-hidden />
+
       <canvas ref={canvasRef} className="absolute inset-0 z-50 pointer-events-none" />
 
       <StateFanfareBanner
@@ -2078,7 +2107,11 @@ function GameRoom({ params }: { params: { code: string } }) {
         </section>
 
         {/* BOOK PAGE resting on the near edge */}
-        <section className="parchment-panel chronicle-book min-h-0 flex flex-col overflow-hidden">
+        <section
+          className={`parchment-panel chronicle-book min-h-0 flex flex-col overflow-hidden ${
+            inkBleed ? 'v3-ink-bleed' : ''
+          }`}
+        >
           <div className="chronicle-margin px-4 py-2 flex flex-wrap items-center justify-between gap-2">
             <p className="italic">
               {campaign ? `${campaign.title}` : 'The chronicle'}
@@ -2164,7 +2197,10 @@ function GameRoom({ params }: { params: { code: string } }) {
               const roll = parseRollMessage(message?.content ?? '');
               const buddyMsg = parseBuddyTableMessage(message?.content ?? '');
               return (
-                <div key={`${message.id}-${message.created_at}`} className="ink-line">
+                <div
+                  key={`${message.id}-${message.created_at}`}
+                  className={`ink-line ${buddyMsg ? 'v3-buddy-slip' : ''}`}
+                >
                   <p
                     className={`ink-entry-name ${
                       isGm || isChronicle ? 'ink-entry-gm' : ''
@@ -2236,7 +2272,12 @@ function GameRoom({ params }: { params: { code: string } }) {
               <button
                 type="submit"
                 disabled={!inputMessage.trim() || isGMLoading}
-                className="wax-button px-5 py-2 text-[11px]"
+                className={`wax-button px-5 py-2 text-[11px] ${stampPulse ? 'v3-stamp-pulse' : ''}`}
+                onClick={() => {
+                  setStampPulse(true);
+                  playWaxStamp();
+                  window.setTimeout(() => setStampPulse(false), 400);
+                }}
               >
                 {isGMLoading ? '…' : 'Seal'}
               </button>
@@ -2280,11 +2321,16 @@ function GameRoom({ params }: { params: { code: string } }) {
                   {activeSheet ? ` · AC ${activeSheet.armorClass}` : ''}
                   {activeSheet ? ` · L${activeSheet.level}` : ''}
                 </p>
+                {(activeSheet?.seed || currentPlayer?.seed) && (
+                  <span className="v3-sheet-seal">
+                    {activeSheet?.seed ?? currentPlayer?.seed}
+                  </span>
+                )}
                 {activeSheet && (activeSheet.level || 1) < 5 && (
                   <button
                     type="button"
                     onClick={() => setLevelUpOpen(true)}
-                    className="mt-1 text-[11px] italic text-[#f59e0b] hover:underline"
+                    className="mt-1 text-[11px] italic text-[#f59e0b] hover:underline block"
                   >
                     Level-up ritual →
                   </button>
@@ -2304,12 +2350,9 @@ function GameRoom({ params }: { params: { code: string } }) {
 
           {(activeSheet?.seed || currentPlayer?.seed) && (
             <div className="border border-[#8b5e34] px-3 py-2 bg-black/20">
-              <p className="text-[11px] italic text-[#b8965c]">Legend seed</p>
-              <p className="font-display text-sm tracking-[0.15em] text-[#f0e2c4]">
-                {activeSheet?.seed ?? currentPlayer?.seed}
-              </p>
+              <p className="text-[11px] italic text-[#b8965c]">Carry this seed</p>
               <p className="text-[11px] italic text-[#a89070] mt-1">
-                Carry this seed to another table.
+                The wax above is your passport to another table.
               </p>
             </div>
           )}

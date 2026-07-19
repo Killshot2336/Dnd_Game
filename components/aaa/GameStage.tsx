@@ -86,6 +86,7 @@ export default function GameStage({
         >
           <div className="aaa-boot-ember" />
           <p className="aaa-boot-mark">Voidline</p>
+          <p className="aaa-boot-sub">Lighting the table…</p>
         </div>
       )}
     </div>

@@ -55,7 +55,10 @@ export default function HomeDashboard() {
 
   return (
     <GameStage className="tabletop-shell" ambient>
-      <div className="relative flex flex-col items-center justify-center min-h-screen p-4">
+      <div className="relative flex flex-col items-center justify-center min-h-screen p-4 v3-chamber">
+        <div className="v3-chamber-wall" aria-hidden />
+        <div className="v3-sconce v3-sconce-left" aria-hidden />
+        <div className="v3-sconce v3-sconce-right" aria-hidden />
         <div
           className="absolute inset-0 bg-cover bg-center parallax-drift opacity-40 plate-ink"
           style={{
@@ -70,12 +73,12 @@ export default function HomeDashboard() {
           <div className="space-y-2">
             <p className="session-seal text-[10px]">Voidline Tabletop</p>
             <h1 className="font-display text-4xl sm:text-5xl text-[#f0e2c4] drop-shadow-[0_4px_12px_rgba(0,0,0,0.85)]">
-              {mode === 'home' ? 'The Vault' : 'Choose a campaign'}
+              {mode === 'home' ? 'Sit down at the table' : 'Choose a campaign'}
             </h1>
             <p className="text-[#b8965c] italic text-sm">
               {mode === 'home'
-                ? 'Aden · Edward · Jamie — seals remember. Continues await.'
-                : 'Three doors. Heat, clocks, and memory keep every choice.'}
+                ? 'Aden · Edward · Jamie — wood, wax, and the Arbiter waiting.'
+                : 'Three doors. Each room smells different when you sit.'}
             </p>
           </div>
 

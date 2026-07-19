@@ -32,7 +32,7 @@ export default function TitleCard({
         {card.subtitle ? (
           <p className="vault-title-card-sub">{card.subtitle}</p>
         ) : null}
-        <p className="vault-title-card-hint">Tap to continue</p>
+        <p className="vault-title-card-hint">Tap the banner to continue</p>
       </div>
     </button>
   );

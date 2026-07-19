@@ -1,0 +1,754 @@
+/* ============================================================
+   Voidline v3 — Sit Down at the Table
+   Physical chamber · campaign dress · ritual motion · props
+   ============================================================ */
+
+:root {
+  --v3-candle: #f0a040;
+  --v3-candle-soft: rgba(240, 160, 64, 0.35);
+  --v3-wood-deep: #1a100c;
+  --v3-wood-mid: #3a2416;
+  --v3-wood-edge: #6b4423;
+  --v3-brass: #c4a574;
+  --v3-ink: #2a160e;
+  --v3-blood: #8b122e;
+  --v3-felt: #1c1410;
+  --v3-parchment: #e4d0a2;
+  --v3-parchment-deep: #c9b07a;
+}
+
+/* ——— Campaign dress: whole-room costume ——— */
+.campaign-dress-ashcrown {
+  --v3-candle: #e8b060;
+  --v3-candle-soft: rgba(232, 176, 96, 0.38);
+  --v3-wood-deep: #140e0a;
+  --v3-wood-mid: #3d2a18;
+  --v3-wood-edge: #8a6a3a;
+  --v3-brass: #d4b878;
+  --v3-felt: #1a120c;
+  --v3-ink: #2c1810;
+  --v3-blood: #9a2030;
+}
+
+.campaign-dress-saltwake {
+  --v3-candle: #7ec8e8;
+  --v3-candle-soft: rgba(90, 170, 200, 0.32);
+  --v3-wood-deep: #0c1216;
+  --v3-wood-mid: #1e2e36;
+  --v3-wood-edge: #4a6a78;
+  --v3-brass: #a8c4c8;
+  --v3-felt: #121820;
+  --v3-ink: #142028;
+  --v3-blood: #2a6080;
+  --v3-parchment: #d4e0e4;
+  --v3-parchment-deep: #a8bcc4;
+}
+
+.campaign-dress-blackroot {
+  --v3-candle: #c45a9a;
+  --v3-candle-soft: rgba(196, 90, 154, 0.36);
+  --v3-wood-deep: #0e0a0c;
+  --v3-wood-mid: #2a1a22;
+  --v3-wood-edge: #5a3048;
+  --v3-brass: #b89070;
+  --v3-felt: #140e12;
+  --v3-ink: #1e1218;
+  --v3-blood: #7a1848;
+  --v3-parchment: #d8c8a8;
+  --v3-parchment-deep: #a89068;
+}
+
+/* ——— Chamber: full-bleed room around the table ——— */
+.v3-chamber {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 50% -10%, var(--v3-candle-soft), transparent 42%),
+    radial-gradient(ellipse at 8% 40%, rgba(0, 0, 0, 0.35), transparent 35%),
+    radial-gradient(ellipse at 92% 55%, rgba(0, 0, 0, 0.4), transparent 38%),
+    linear-gradient(180deg, var(--v3-wood-deep) 0%, #080604 100%);
+}
+
+.v3-chamber-wall {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0%, transparent 12%, transparent 88%, rgba(0, 0, 0, 0.55) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.5) 0%, transparent 18%, transparent 78%, rgba(0, 0, 0, 0.65) 100%);
+  z-index: 1;
+}
+
+.v3-sconce {
+  position: absolute;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--v3-candle-soft), transparent 70%);
+  animation: torchFlicker 2.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.v3-sconce-left {
+  left: 0.5rem;
+  top: 28%;
+}
+
+.v3-sconce-right {
+  right: 0.5rem;
+  top: 36%;
+  animation-delay: 0.9s;
+}
+
+.v3-sconce-far {
+  left: 50%;
+  top: 6%;
+  transform: translateX(-50%);
+  width: 7rem;
+  height: 5rem;
+  opacity: 0.7;
+}
+
+/* ——— Room split: table dominates, book rests on near wood ——— */
+.room-split {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-rows: minmax(0, 1.35fr) minmax(0, 0.78fr);
+  gap: 0;
+  height: 100vh;
+  max-height: 100vh;
+  padding: 0.5rem 0.5rem 0;
+}
+
+@media (min-width: 640px) {
+  .room-split {
+    padding: 0.65rem 1rem 0;
+  }
+}
+
+/* ——— Table plane: scuffed wood, deeper 2.5D ——— */
+.board-frame {
+  position: relative;
+  border: none !important;
+  border-radius: 0;
+  box-shadow:
+    inset 0 0 120px rgba(0, 0, 0, 0.75),
+    0 28px 80px rgba(0, 0, 0, 0.8) !important;
+  background: var(--v3-wood-deep);
+  overflow: hidden;
+}
+
+.board-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, transparent 22%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.55) 0%, transparent 28%);
+}
+
+.board-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 10px var(--v3-wood-mid), inset 0 0 0 12px var(--v3-wood-edge);
+  opacity: 0.85;
+}
+
+.fp-table-stage {
+  perspective: 1100px;
+  perspective-origin: 50% 78%;
+}
+
+.fp-table-plane {
+  transform: rotateX(58deg) scale(1.22);
+  transform-origin: 50% 100%;
+  filter: blur(0px);
+}
+
+.fp-table-felt {
+  background-color: var(--v3-felt) !important;
+  border: 8px solid var(--v3-wood-mid) !important;
+  outline: 2px solid var(--v3-wood-edge) !important;
+  box-shadow:
+    inset 0 0 100px rgba(0, 0, 0, 0.7),
+    inset 0 -50px 80px rgba(0, 0, 0, 0.35),
+    0 40px 70px rgba(0, 0, 0, 0.75) !important;
+}
+
+.fp-table-felt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 30% 40%, transparent 40%, rgba(0, 0, 0, 0.25) 100%),
+    repeating-linear-gradient(
+      95deg,
+      transparent 0,
+      transparent 3px,
+      rgba(255, 255, 255, 0.015) 3px,
+      rgba(255, 255, 255, 0.015) 4px
+    );
+  mix-blend-mode: overlay;
+  z-index: 2;
+}
+
+.fp-lantern {
+  background: radial-gradient(circle, var(--v3-candle-soft), transparent 70%) !important;
+}
+
+.token-spotlight {
+  filter: drop-shadow(0 0 18px var(--v3-candle-soft)) drop-shadow(0 0 6px var(--v3-candle)) !important;
+}
+
+.token-spotlight::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  width: 5.5rem;
+  height: 5.5rem;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--v3-candle-soft), transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+  animation: v3-lantern-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes v3-lantern-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+/* ——— Tri-fold GM screen ——— */
+.dm-screen {
+  background:
+    linear-gradient(180deg, var(--v3-wood-mid) 0%, var(--v3-wood-deep) 100%) !important;
+  border: 3px solid var(--v3-wood-edge) !important;
+  box-shadow:
+    -18px 8px 0 -2px rgba(20, 12, 8, 0.95),
+    18px 8px 0 -2px rgba(20, 12, 8, 0.95),
+    0 16px 40px rgba(0, 0, 0, 0.65) !important;
+  clip-path: polygon(4% 0, 96% 0, 100% 8%, 100% 100%, 0 100%, 0 8%);
+}
+
+.dm-screen.gm-breathe {
+  animation: gmBreathe 2.2s ease-in-out infinite, v3-screen-glow 2.2s ease-in-out infinite;
+}
+
+@keyframes v3-screen-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    filter: drop-shadow(0 0 12px var(--v3-candle-soft));
+  }
+}
+
+.dm-screen-art {
+  border: 2px solid var(--v3-brass);
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.6);
+}
+
+/* ——— Chronicle: book resting on near wood ——— */
+.chronicle-book {
+  margin-top: -2.25rem !important;
+  background-color: var(--v3-parchment) !important;
+  color: var(--v3-ink) !important;
+  box-shadow:
+    inset 0 0 70px rgba(80, 50, 20, 0.28),
+    0 -14px 0 var(--v3-wood-edge),
+    0 -18px 0 var(--v3-wood-mid),
+    0 28px 60px rgba(0, 0, 0, 0.75) !important;
+  animation: v3-book-settle 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes v3-book-settle {
+  from {
+    opacity: 0.4;
+    transform: translateY(18px) rotateX(8deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateX(0);
+  }
+}
+
+.chronicle-book.v3-ink-bleed .ink-line:last-of-type .ink-entry-body {
+  animation: v3-ink-write 0.7s ease both;
+}
+
+@keyframes v3-ink-write {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.parchment-panel {
+  background-color: var(--v3-parchment);
+  color: var(--v3-ink);
+  border-color: var(--v3-wood-edge);
+}
+
+/* ——— Brass plaque / etched gauges (not HUD) ——— */
+.brass-plaque {
+  background:
+    linear-gradient(165deg, rgba(60, 40, 22, 0.92), rgba(20, 12, 8, 0.94)) !important;
+  border: 2px solid var(--v3-brass) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.55) !important;
+  clip-path: polygon(2% 0, 98% 0, 100% 12%, 100% 88%, 98% 100%, 2% 100%, 0 88%, 0 12%);
+}
+
+.v3-gauge-strip .clock-notch {
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--v3-wood-edge);
+  height: 5px;
+}
+
+.v3-gauge-strip .clock-notch-fill {
+  background: linear-gradient(90deg, var(--v3-wood-edge), var(--v3-blood));
+}
+
+/* ——— Prop-ified vault surfaces ——— */
+.vault-checks {
+  background:
+    linear-gradient(180deg, rgba(240, 160, 64, 0.12), transparent) !important;
+  border-bottom: 1px dashed rgba(92, 58, 33, 0.45) !important;
+}
+
+.vault-check-chip {
+  background:
+    linear-gradient(180deg, #f2e2c0, var(--v3-parchment-deep)) !important;
+  border: 2px solid var(--v3-wood-edge) !important;
+  box-shadow: 0 3px 0 var(--v3-wood-mid) !important;
+  clip-path: polygon(3% 0, 97% 0, 100% 15%, 100% 85%, 97% 100%, 3% 100%, 0 85%, 0 15%);
+}
+
+.vault-clash-hud {
+  background:
+    linear-gradient(160deg, rgba(30, 12, 10, 0.92), rgba(12, 6, 4, 0.95)) !important;
+  border: 2px solid var(--v3-blood) !important;
+  clip-path: polygon(0 8%, 8% 0, 100% 0, 100% 92%, 92% 100%, 0 100%);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+.vault-clash-fill {
+  background: linear-gradient(90deg, var(--v3-blood), var(--v3-candle)) !important;
+}
+
+.vault-host-panel {
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(120, 70, 30, 0.25), transparent 50%),
+    linear-gradient(180deg, #4a3020, #1a100c) !important;
+  border: 4px solid var(--v3-wood-edge) !important;
+  box-shadow:
+    inset 0 0 40px rgba(0, 0, 0, 0.45),
+    0 20px 50px rgba(0, 0, 0, 0.7) !important;
+  clip-path: polygon(0 0, 100% 0, 100% 96%, 97% 100%, 3% 100%, 0 96%);
+}
+
+.vault-host-panel::before {
+  content: '';
+  position: absolute;
+  left: 0.4rem;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 0.35rem;
+  background: linear-gradient(180deg, var(--v3-brass), var(--v3-wood-edge));
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.vault-host-fab {
+  background:
+    linear-gradient(160deg, #5a3a22, #2a1810) !important;
+  border: 2px solid var(--v3-brass) !important;
+  color: var(--v3-brass) !important;
+  letter-spacing: 0.18em !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.vault-title-card {
+  background:
+    radial-gradient(ellipse at center, rgba(30, 18, 10, 0.5), rgba(6, 3, 2, 0.94)),
+    rgba(0, 0, 0, 0.75) !important;
+}
+
+.vault-title-card-inner {
+  position: relative;
+  padding: 2.5rem 2rem !important;
+  border: 3px solid var(--v3-brass);
+  background:
+    linear-gradient(180deg, rgba(60, 40, 22, 0.55), rgba(20, 12, 8, 0.75));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  animation: v3-banner-unfurl 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes v3-banner-unfurl {
+  from {
+    opacity: 0;
+    transform: scaleY(0.15) translateY(-40%);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+.arbiter-moments {
+  background:
+    linear-gradient(180deg, transparent, rgba(18, 12, 8, 0.65)) !important;
+  border-top: 1px dashed var(--v3-wood-edge) !important;
+}
+
+.arbiter-moment {
+  position: relative;
+  padding-left: 0.85rem;
+}
+
+.arbiter-moment::before {
+  content: '❧';
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 10px;
+  color: var(--v3-brass);
+  opacity: 0.8;
+}
+
+.ink-entry-buddy {
+  color: #5c3a21 !important;
+}
+
+.ink-line.v3-buddy-slip {
+  position: relative;
+  margin: 0.5rem 0;
+  padding: 0.55rem 0.75rem;
+  background: linear-gradient(180deg, #f0e2c4, #d8c49a);
+  border: 1px solid var(--v3-wood-edge);
+  box-shadow: 2px 3px 0 rgba(60, 40, 22, 0.35);
+  transform: rotate(-0.4deg);
+  animation: v3-note-slip 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes v3-note-slip {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(-0.4deg);
+  }
+}
+
+/* ——— Bone dice tray ——— */
+.dice-tray {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.35rem 0;
+}
+
+.bone-die {
+  background:
+    radial-gradient(circle at 30% 25%, #f8f0e0, #c8b090 70%) !important;
+  border: 2px solid #8a7050 !important;
+  color: #2a160e !important;
+  font-family: 'Cinzel', Georgia, serif !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 3px 0 #5a4030,
+    0 6px 10px rgba(0, 0, 0, 0.35) !important;
+  border-radius: 0.35rem !important;
+  min-width: 2.6rem;
+  padding: 0.35rem 0.45rem;
+  transition: transform 0.12s ease;
+}
+
+.bone-die:hover {
+  transform: translateY(-2px) rotate(-2deg);
+}
+
+.bone-die:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 1px 0 #5a4030 !important;
+}
+
+.dice-tray-lit {
+  animation: vault-dice-pulse 1.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px var(--v3-candle-soft));
+}
+
+.dice-tray-lit .bone-die {
+  animation: v3-die-wiggle 0.9s ease-in-out infinite;
+}
+
+@keyframes v3-die-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  30% {
+    transform: rotate(-4deg);
+  }
+  60% {
+    transform: rotate(3deg);
+  }
+}
+
+/* ——— Sacred leather sheet ——— */
+.sheet-leather {
+  background:
+    radial-gradient(ellipse at 25% 8%, rgba(140, 80, 30, 0.28), transparent 45%),
+    radial-gradient(ellipse at 80% 90%, rgba(0, 0, 0, 0.35), transparent 40%),
+    linear-gradient(185deg, #4a3020 0%, #2a1810 40%, #120c08 100%) !important;
+  border-left: 10px solid var(--v3-wood-edge) !important;
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.7) !important;
+}
+
+.sheet-leather::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 70% 20%, rgba(80, 40, 20, 0.2), transparent 30%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 3px
+    );
+  opacity: 0.5;
+  z-index: 0;
+}
+
+.sheet-leather > * {
+  position: relative;
+  z-index: 1;
+}
+
+.sheet-stat-box {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(80, 50, 20, 0.35), rgba(12, 8, 4, 0.7)) !important;
+  border: 2px solid var(--v3-brass) !important;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.45);
+  clip-path: polygon(8% 0, 92% 0, 100% 12%, 100% 88%, 92% 100%, 8% 100%, 0 88%, 0 12%);
+}
+
+.sheet-tab {
+  border-color: var(--v3-wood-edge) !important;
+  color: var(--v3-brass) !important;
+}
+
+.sheet-tab-active {
+  background: rgba(139, 18, 46, 0.28) !important;
+  border-color: var(--v3-blood) !important;
+  color: #f0e2c4 !important;
+}
+
+.v3-sheet-seal {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fce7ef;
+  background: radial-gradient(circle at 30% 28%, #c41e3a, #6b1020 72%);
+  border: 1px solid #3b0a12;
+  border-radius: 999px;
+  box-shadow: 0 3px 0 #3b0a12;
+}
+
+/* ——— Ritual: wax stamp on Seal ——— */
+.wax-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.wax-button.v3-stamp-pulse {
+  animation: v3-stamp 0.35s ease;
+}
+
+@keyframes v3-stamp {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(0.92) translateY(2px);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ——— Clash start punch ——— */
+.v3-clash-bang .fp-gm-seat {
+  animation: v3-screen-bang 0.45s ease;
+}
+
+@keyframes v3-screen-bang {
+  0% {
+    transform: translateZ(28px) translateY(-8%) rotate(0deg);
+  }
+  30% {
+    transform: translateZ(28px) translateY(-8%) rotate(-1.5deg) scale(1.03);
+  }
+  100% {
+    transform: translateZ(28px) translateY(-8%) rotate(0deg);
+  }
+}
+
+/* ——— Landing gate: physical table invitation ——— */
+.gate-stage-inner .parchment-panel {
+  box-shadow:
+    inset 0 0 60px rgba(80, 50, 20, 0.25),
+    0 -10px 0 var(--v3-wood-edge),
+    0 24px 55px rgba(0, 0, 0, 0.7) !important;
+}
+
+.vault-continue-row {
+  background: rgba(40, 24, 16, 0.12) !important;
+  border-color: var(--v3-wood-edge) !important;
+}
+
+/* ——— Boot: lanterns light ——— */
+.aaa-boot {
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(60, 30, 10, 0.4), #050302 70%) !important;
+}
+
+.aaa-boot-ember {
+  background: radial-gradient(circle, var(--v3-candle-soft), transparent 65%) !important;
+}
+
+/* ——— Mini polish ——— */
+.mini-base {
+  border-color: var(--v3-brass) !important;
+}
+
+.campaign-dress-ashcrown .mini-base {
+  border-color: #d4b878 !important;
+}
+
+.campaign-dress-saltwake .mini-base {
+  border-color: #88b0b8 !important;
+}
+
+.campaign-dress-blackroot .mini-base {
+  border-color: #a06080 !important;
+}
+
+.campaign-dress-ashcrown .fp-table-felt {
+  box-shadow:
+    inset 0 0 90px rgba(0, 0, 0, 0.6),
+    inset 0 -50px 70px rgba(140, 100, 40, 0.2),
+    0 40px 70px rgba(0, 0, 0, 0.75) !important;
+}
+
+.campaign-dress-saltwake .fp-table-felt::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22%;
+  background: linear-gradient(180deg, transparent, rgba(40, 100, 130, 0.4));
+  pointer-events: none;
+  z-index: 3;
+}
+
+.campaign-dress-blackroot .fp-lantern {
+  background: radial-gradient(circle, rgba(196, 90, 154, 0.45), transparent 70%) !important;
+}
+
+/* Level-up as page ritual */
+.vault-levelup-inner {
+  background:
+    linear-gradient(165deg, var(--v3-parchment), var(--v3-parchment-deep)) !important;
+  color: var(--v3-ink) !important;
+  border: 4px solid var(--v3-wood-edge) !important;
+  box-shadow:
+    inset 0 0 50px rgba(80, 50, 20, 0.2),
+    0 24px 60px rgba(0, 0, 0, 0.7) !important;
+  clip-path: polygon(1% 0, 99% 0.5%, 100% 98%, 2% 100%, 0 4%);
+}
+
+.vault-levelup-inner .font-display,
+.vault-levelup-inner h3 {
+  color: var(--v3-ink) !important;
+}
+
+.vault-lore-option {
+  border-color: var(--v3-wood-edge) !important;
+  background: rgba(255, 248, 230, 0.35) !important;
+}
+
+.vault-lore-option-on {
+  border-color: var(--v3-blood) !important;
+  background: rgba(159, 18, 57, 0.12) !important;
+}
+
+.vault-lore-option span {
+  color: var(--v3-ink) !important;
+}
+
+/* Sacred PHB sheet under candlelight */
+.v3-sacred-sheet {
+  position: relative;
+  box-shadow:
+    inset 0 0 90px rgba(80, 50, 20, 0.22),
+    0 28px 70px rgba(0, 0, 0, 0.75) !important;
+}
+
+.v3-sacred-sheet::after {
+  content: '';
+  position: absolute;
+  right: 12%;
+  top: 8%;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    transparent 42%,
+    rgba(90, 55, 25, 0.12) 55%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sheet-room.v3-chamber {
+  background:
+    radial-gradient(ellipse at 50% 10%, var(--v3-candle-soft), transparent 45%),
+    #120c08;
+}

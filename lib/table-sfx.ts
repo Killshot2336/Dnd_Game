@@ -62,6 +62,40 @@ export function playScreenPunch() {
   playFile('/audio/sfx-wood.mp3', 0.35);
 }
 
+/** Clash begins — steel on wood. */
+export function playSteelScrape() {
+  playFile('/audio/sfx-wood.mp3', 0.5);
+  window.setTimeout(() => playFile('/audio/sfx-dice.mp3', 0.25), 60);
+}
+
+/** Lantern slides to a seat. */
+export function playLanternPass() {
+  playFile('/audio/sfx-page.mp3', 0.22);
+  window.setTimeout(() => playFile('/audio/sfx-wax.mp3', 0.2), 90);
+}
+
+/** Soft duck ambient when Arbiter speaks, then restore. */
+export function duckAmbientForSpeech(ms = 2200) {
+  if (!ambientEl || !canPlay()) return;
+  const el = ambientEl;
+  const target = Math.max(0.04, el.volume * 0.35);
+  const prior = el.volume;
+  el.volume = target;
+  window.setTimeout(() => {
+    if (ambientEl === el) {
+      const start = performance.now();
+      const from = el.volume;
+      const rise = () => {
+        if (ambientEl !== el) return;
+        const t = Math.min(1, (performance.now() - start) / 600);
+        el.volume = from + (prior - from) * t;
+        if (t < 1) requestAnimationFrame(rise);
+      };
+      requestAnimationFrame(rise);
+    }
+  }, ms);
+}
+
 function ambientForFlavor(flavor: string): string {
   if (flavor === 'saltwake') return '/audio/ambient-harbor.mp3';
   if (flavor === 'blackroot') return '/audio/ambient-carnival.mp3';

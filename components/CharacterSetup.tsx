@@ -230,8 +230,11 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
   /* —— Full character sheet —— */
   if (stage === 'sheet') {
     return (
-      <GameStage className="sheet-room" skipBoot ambient={false}>
+      <GameStage className="sheet-room v3-chamber" skipBoot ambient={false}>
       <div className="fixed inset-0 z-50 overflow-y-auto custom-scrollbar">
+        <div className="v3-chamber-wall" aria-hidden />
+        <div className="v3-sconce v3-sconce-left" aria-hidden />
+        <div className="v3-sconce v3-sconce-right" aria-hidden />
         <div
           className="absolute inset-0 bg-cover bg-center opacity-28 plate-ink parallax-drift"
           style={{ backgroundImage: `url(${ROOM_BG})` }}
@@ -251,7 +254,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
               ← Choose another archetype
             </button>
             <p className="text-[12px] italic">
-              Printed from the ten allowed legends · ink what is yours
+              Candlelight sheet · ten legends · your ink
             </p>
           </div>
 
@@ -261,7 +264,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
             </p>
           )}
 
-          <div className="dnd-sheet p-3 sm:p-5 space-y-3">
+          <div className="dnd-sheet v3-sacred-sheet p-3 sm:p-5 space-y-3">
             {/* Header identity */}
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_7.5rem]">
               <div className="dnd-box px-3 py-2">
@@ -494,15 +497,18 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
 
   /* —— Arrive / pick / AI gate —— */
   return (
-    <GameStage className="sheet-room" skipBoot ambient={false}>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <GameStage className="sheet-room v3-chamber" skipBoot ambient={false}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="v3-chamber-wall" aria-hidden />
+        <div className="v3-sconce v3-sconce-left" aria-hidden />
+        <div className="v3-sconce v3-sconce-right" aria-hidden />
       <div
         className="absolute inset-0 bg-cover bg-center opacity-32 plate-ink parallax-drift"
         style={{ backgroundImage: `url(${ROOM_BG})` }}
       />
       <div className="absolute inset-0 bg-[#120c08]/80" />
 
-      <div className="dnd-sheet relative max-w-lg w-full p-5 sm:p-7 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar gate-stage-inner">
+      <div className="dnd-sheet v3-sacred-sheet relative max-w-lg w-full p-5 sm:p-7 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar gate-stage-inner">
         <div>
           <h2 className="font-display text-2xl text-[#2a160e]">
             {stage === 'arrive' && 'Take your seat'}
