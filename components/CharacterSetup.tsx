@@ -269,7 +269,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
                         alt=""
                         fill
                         sizes="48px"
-                        className="object-cover"
+                        className="object-cover object-top plate-ink"
                       />
                     </div>
                     <div>
