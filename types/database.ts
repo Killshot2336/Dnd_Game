@@ -80,8 +80,11 @@ export interface GmStreamRequest {
   history: HistoryMessage[];
   partySheets?: string[];
   actorSheet?: string;
+  campaignId?: string | null;
+  reactiveState?: Record<string, unknown> | null;
 }
 
 export interface GmStreamResponse {
   reply: string;
+  statePatch?: Record<string, unknown> | null;
 }

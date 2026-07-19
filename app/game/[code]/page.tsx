@@ -1,15 +1,25 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import CharacterSetup, { type ForgeJoinPayload } from '@/components/CharacterSetup';
+import ReactiveStateStrip from '@/components/tabletop/ReactiveStateStrip';
 import TokenPiece from '@/components/tabletop/TokenPiece';
+import {
+  applyReactivePatch,
+  buildInitialStateData,
+  extractStatePatch,
+  getCampaign,
+  isCampaignId,
+  readReactiveState,
+  type ReactiveCampaignState,
+} from '@/lib/campaigns';
 import {
   BOARD_TEXTURE,
   GM_PORTRAIT,
   INVENTORY_SLOTS,
-  MAP_SCENE,
   portraitForPlayer,
 } from '@/lib/game-art';
 import { compactSheetForGm, sheetSnapshot, type CharacterSheet } from '@/lib/character-sheet';
@@ -57,8 +67,24 @@ interface DiceParticle {
   value: number;
 }
 
-export default function GameRoom({ params }: { params: { code: string } }) {
+export default function GameRoomPage({ params }: { params: { code: string } }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen tabletop-shell flex items-center justify-center font-display text-sm tracking-[0.35em] uppercase text-[#c4a574] animate-pulse">
+          Unfurling the campaign board…
+        </div>
+      }
+    >
+      <GameRoom params={params} />
+    </Suspense>
+  );
+}
+
+function GameRoom({ params }: { params: { code: string } }) {
   const sessionCode = String(params?.code ?? '').toUpperCase();
+  const searchParams = useSearchParams();
+  const campaignParam = searchParams?.get('campaign') ?? null;
   const [game, setGame] = useState<GameRecord | null>(null);
   const [players, setPlayers] = useState<PlayerEntity[]>([]);
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
@@ -299,12 +325,24 @@ export default function GameRoom({ params }: { params: { code: string } }) {
         }
 
         if (!gameData) {
+          const campaignId = isCampaignId(campaignParam ?? '')
+            ? (campaignParam as string)
+            : null;
+          const campaign = getCampaign(campaignId);
+          const stateData = campaignId
+            ? buildInitialStateData(campaignId as 'ashcrown' | 'saltwake' | 'blackroot')
+            : { campaignId: null, reactive: null };
+          const opening =
+            campaign?.openingNarrative ??
+            'The dynamic void initializes. Welcome, degenerates.';
+
           const { data: newGame, error: insertError } = await supabase
             .from('games')
             .insert([
               {
                 session_code: sessionCode,
-                current_narrative: 'The dynamic void initializes. Welcome, degenerates.',
+                current_narrative: opening,
+                state_data: stateData,
               },
             ])
             .select()
@@ -367,7 +405,7 @@ export default function GameRoom({ params }: { params: { code: string } }) {
       }
       channelRef.current = null;
     };
-  }, [attachRealtimeChannel, refreshRoomState, sessionCode]);
+  }, [attachRealtimeChannel, campaignParam, refreshRoomState, sessionCode]);
 
   // Heartbeat: auto-reconnect + re-fetch latest room state without hard refresh
   useEffect(() => {
@@ -748,7 +786,14 @@ export default function GameRoom({ params }: { params: { code: string } }) {
       });
 
       let gmReply = 'The simulation warped. Repeat your raw action.';
+      let statePatch: Partial<ReactiveCampaignState> | null = null;
       try {
+        const reactive = readReactiveState(game.state_data);
+        const campaignId =
+          (typeof game.state_data?.campaignId === 'string'
+            ? game.state_data.campaignId
+            : reactive?.campaignId) ?? null;
+
         const res = await fetch('/api/gm-stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -759,12 +804,19 @@ export default function GameRoom({ params }: { params: { code: string } }) {
             history: activeHistory,
             partySheets,
             actorSheet: compactSheetForGm(activeSheet),
+            campaignId,
+            reactiveState: reactive,
           }),
         });
 
-        const data = (await res.json()) as { reply?: string };
+        const data = (await res.json()) as {
+          reply?: string;
+          statePatch?: Partial<ReactiveCampaignState> | null;
+        };
         if (typeof data?.reply === 'string' && data.reply.trim()) {
-          gmReply = data.reply.trim();
+          const extracted = extractStatePatch(data.reply.trim());
+          gmReply = extracted.cleanReply;
+          statePatch = data.statePatch ?? extracted.patch;
         }
       } catch (apiError) {
         console.error('GM API transport failure:', apiError);
@@ -773,11 +825,21 @@ export default function GameRoom({ params }: { params: { code: string } }) {
 
       const optimisticGmMsg = createOptimisticMessage(activeGameId, 'GM', gmReply);
       setMessages((prev) => mergeMessageLedger(prev, optimisticGmMsg));
+
+      let nextStateData = game.state_data ?? {};
+      if (statePatch) {
+        nextStateData = applyReactivePatch(
+          (game.state_data ?? {}) as Record<string, unknown>,
+          statePatch
+        );
+      }
+
       setGame((prev) =>
         prev
           ? {
               ...prev,
               current_narrative: gmReply,
+              state_data: nextStateData,
             }
           : prev
       );
@@ -799,10 +861,13 @@ export default function GameRoom({ params }: { params: { code: string } }) {
       }
 
       try {
-        await supabase
-          .from('games')
-          .update({ current_narrative: gmReply })
-          .eq('id', activeGameId);
+        const updatePayload: Record<string, unknown> = {
+          current_narrative: gmReply,
+        };
+        if (statePatch) {
+          updatePayload.state_data = nextStateData;
+        }
+        await supabase.from('games').update(updatePayload).eq('id', activeGameId);
       } catch (narrativeError) {
         console.error('Narrative persist failure:', narrativeError);
       }
@@ -893,25 +958,33 @@ export default function GameRoom({ params }: { params: { code: string } }) {
     currentPlayer?.user_name,
     currentPlayer?.avatar_class
   );
+  const reactive = readReactiveState(game?.state_data);
+  const campaign = getCampaign(
+    typeof game?.state_data?.campaignId === 'string'
+      ? (game.state_data.campaignId as string)
+      : reactive?.campaignId
+  );
+  const tableArt = campaign?.tableArt ?? BOARD_TEXTURE;
+  const mapArt = campaign?.mapArt ?? campaign?.coverArt ?? BOARD_TEXTURE;
 
   return (
     <div className="min-h-screen tabletop-shell overflow-hidden antialiased select-none relative text-[#f3e6c8]">
       <canvas ref={canvasRef} className="absolute inset-0 z-50 pointer-events-none" />
 
-      {/* Full-bleed table wood */}
+      {/* Room atmosphere behind the table */}
       <div
-        className="absolute inset-0 bg-cover bg-center ken-burns opacity-90"
-        style={{ backgroundImage: `url(${BOARD_TEXTURE})` }}
+        className="absolute inset-0 bg-cover bg-center opacity-40 ken-burns"
+        style={{ backgroundImage: `url(${mapArt})` }}
         aria-hidden
       />
-      <div className="absolute inset-0 bg-[#140e0a]/70" />
-      <div className="absolute inset-0 bg-gradient-to-t from-[#140e0a] via-transparent to-[#140e0a]/80" />
+      <div className="absolute inset-0 bg-[#140e0a]/75" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#140e0a] via-transparent to-[#140e0a]/85" />
       <div className="absolute left-8 top-24 w-40 h-40 torch-glow" />
       <div className="absolute right-10 bottom-40 w-48 h-48 torch-glow" />
 
-      {/* Etched session seal — no SaaS header */}
       <div className="absolute top-4 left-4 z-30 session-seal text-[10px] sm:text-xs">
         SEAL {sessionCode}
+        {campaign ? ` · ${campaign.title}` : ''}
       </div>
       <button
         type="button"
@@ -927,79 +1000,108 @@ export default function GameRoom({ params }: { params: { code: string } }) {
         </div>
       )}
 
-      <div className="relative z-10 h-screen max-h-screen grid grid-rows-[minmax(0,1.15fr)_minmax(0,0.85fr)] gap-3 p-3 sm:p-5">
-        {/* TOKEN MAP */}
-        <section className="board-frame relative rounded-sm overflow-hidden min-h-0">
+      <div className="relative z-10 h-screen max-h-screen grid grid-rows-[minmax(0,1.2fr)_minmax(0,0.8fr)] gap-3 p-3 sm:p-5">
+        {/* 2.5D FIRST-PERSON TABLE */}
+        <section className="board-frame relative rounded-sm overflow-hidden min-h-0 fp-table-stage">
+          <div className="absolute inset-0 bg-[#1a100c]" />
           <div
-            className="absolute inset-0 bg-cover bg-center opacity-50"
-            style={{ backgroundImage: `url(${MAP_SCENE})` }}
-            aria-hidden
-          />
-          <div className="absolute inset-0 map-grid opacity-80" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
-
-          {/* DM Screen / GM head of map */}
-          <div
-            className={`absolute top-3 left-1/2 -translate-x-1/2 z-20 w-[min(92%,28rem)] dm-screen rounded-sm p-3 flex items-center gap-3 animate-float ${
-              isGMLoading ? 'gm-breathe' : ''
-            }`}
+            className="absolute inset-[-8%_-5%_8%] fp-table-plane fp-table-felt"
+            style={{
+              backgroundImage: `linear-gradient(180deg, rgba(20,12,8,0.35), rgba(10,6,4,0.65)), url(${tableArt})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
           >
-            <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 overflow-hidden border-2 border-[#c4a574]">
-              <Image src={GM_PORTRAIT} alt="Game Master" fill sizes="80px" className="object-cover" priority />
-            </div>
-            <div className="min-w-0">
-              <p className="font-display text-[10px] uppercase tracking-[0.35em] text-[#c4a574]">
-                Dungeon Master
-              </p>
-              <h2 className="font-display text-lg sm:text-xl font-black text-[#f3e6c8]">
-                Void Arbiter
-              </h2>
-              <p className="text-[12px] text-[#d6c4a1] line-clamp-2 italic leading-snug mt-0.5">
-                {isGMLoading ? 'The Arbiter leans in… dice rattle in the dark.' : narrative}
-              </p>
-            </div>
-          </div>
+            <div className="absolute left-1/4 top-1/3 w-28 h-28 fp-lantern" />
+            <div className="absolute right-1/4 top-1/4 w-24 h-24 fp-lantern" />
 
-          {/* Tokens on the board */}
-          <div className="absolute inset-0 z-10 flex items-end sm:items-center justify-between px-2 sm:px-8 pb-6 sm:pb-10 pt-28">
-            <div className="flex flex-col gap-4 items-center justify-center min-w-[4.5rem]">
-              {leftParty.map((player) => (
-                <div key={player.id} data-player-anchor={player.user_name}>
-                  <TokenPiece player={player} onMount={recordPosition} size="sm" />
-                </div>
-              ))}
-            </div>
-
+            {/* GM at the far end of the table */}
             <div
-              className="flex flex-col items-center gap-2"
+              className={`absolute top-[6%] left-1/2 -translate-x-1/2 z-20 w-[min(70%,18rem)] fp-gm-seat dm-screen rounded-sm p-2 sm:p-3 flex flex-col items-center gap-2 text-center ${
+                isGMLoading ? 'gm-breathe' : 'animate-float'
+              }`}
+            >
+              <div className="relative w-14 h-14 sm:w-16 sm:h-16 overflow-hidden border-2 border-[#c4a574] rounded-sm">
+                <Image
+                  src={campaign?.gmScreenArt ?? GM_PORTRAIT}
+                  alt="Game Master"
+                  fill
+                  sizes="64px"
+                  className="object-cover"
+                  priority
+                />
+              </div>
+              <div className="min-w-0 px-1">
+                <p className="font-display text-[9px] uppercase tracking-[0.35em] text-[#c4a574]">
+                  Far end · GM
+                </p>
+                <h2 className="font-display text-sm sm:text-base font-black text-[#f3e6c8]">
+                  Void Arbiter
+                </h2>
+                <p className="text-[11px] text-[#d6c4a1] line-clamp-2 italic leading-snug mt-0.5">
+                  {isGMLoading
+                    ? 'The Arbiter leans across the wood…'
+                    : narrative}
+                </p>
+              </div>
+            </div>
+
+            {/* Mid-table tokens (party across from you / along sides) */}
+            <div className="absolute inset-x-4 top-[38%] bottom-[28%] flex items-center justify-between px-2 sm:px-8">
+              <div className="flex flex-col gap-5 items-center">
+                {leftParty.map((player) => (
+                  <div
+                    key={player.id}
+                    data-player-anchor={player.user_name}
+                    className="fp-token-lift"
+                  >
+                    <TokenPiece player={player} onMount={recordPosition} size="sm" />
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-col gap-5 items-center">
+                {rightParty.map((player) => (
+                  <div
+                    key={player.id}
+                    data-player-anchor={player.user_name}
+                    className="fp-token-lift"
+                  >
+                    <TokenPiece player={player} onMount={recordPosition} size="sm" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Your seat — near edge of the table */}
+            <div
+              className="absolute bottom-[6%] left-1/2 -translate-x-1/2 fp-near-edge flex flex-col items-center gap-1"
               data-player-anchor={currentPlayer?.user_name ?? 'self'}
             >
-              <TokenPiece
-                player={currentPlayer}
-                emphasized
-                onMount={recordPosition}
-                size="lg"
-              />
-              <p className="font-display text-[10px] uppercase tracking-[0.3em] text-[#f59e0b]">
-                Your token
+              <div className="fp-token-lift">
+                <TokenPiece
+                  player={currentPlayer}
+                  emphasized
+                  onMount={recordPosition}
+                  size="lg"
+                />
+              </div>
+              <p className="font-display text-[10px] uppercase tracking-[0.3em] text-[#f59e0b] drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                Your seat
               </p>
             </div>
-
-            <div className="flex flex-col gap-4 items-center justify-center min-w-[4.5rem]">
-              {rightParty.map((player) => (
-                <div key={player.id} data-player-anchor={player.user_name}>
-                  <TokenPiece player={player} onMount={recordPosition} size="sm" />
-                </div>
-              ))}
-            </div>
           </div>
+
+          <ReactiveStateStrip
+            state={reactive}
+            campaignTitle={campaign?.title ?? null}
+          />
         </section>
 
-        {/* PARCHMENT CHRONICLE */}
+        {/* PARCHMENT CHRONICLE — bottom split */}
         <section className="parchment-panel min-h-0 rounded-sm flex flex-col overflow-hidden">
           <div className="px-4 py-2 border-b border-[#8b5e34]/60 flex items-center justify-between">
             <h3 className="font-display text-sm font-bold tracking-wide text-[#2c1810]">
-              Campaign Chronicle
+              {campaign ? `${campaign.title} Chronicle` : 'Campaign Chronicle'}
             </h3>
             {isGMLoading && (
               <span className="text-[11px] italic text-[#7f1d1d]">Ink still wet…</span>
@@ -1008,8 +1110,8 @@ export default function GameRoom({ params }: { params: { code: string } }) {
 
           <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-3 space-y-3">
             {messages.length === 0 && (
-              <p className="text-sm italic text-[#5c3a21]">
-                The page is blank. Speak an action and the Arbiter will write fate.
+              <p className="text-sm italic text-[#5c3a21] whitespace-pre-wrap">
+                {narrative}
               </p>
             )}
             {messages.map((message) => {

@@ -1,4 +1,12 @@
 import { NextResponse } from 'next/server';
+import {
+  extractStatePatch,
+  formatStateForGm,
+  getCampaign,
+  formatCampaignBible,
+  parseCampaignState,
+  type ReactiveCampaignState,
+} from '@/lib/campaigns';
 import { sanitizeHistory } from '@/lib/game-guards';
 import type { HistoryMessage } from '@/types/database';
 
@@ -56,6 +64,8 @@ function reconstructPayload(raw: unknown): {
   history: HistoryMessage[];
   partySheets: string[];
   actorSheet: string;
+  campaignId: string | null;
+  reactiveState: ReactiveCampaignState | null;
 } {
   const body =
     raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : ({} as Record<string, unknown>);
@@ -87,7 +97,14 @@ function reconstructPayload(raw: unknown): {
       ? body.actorSheet.trim()
       : 'No actor sheet provided.';
 
-  return { playerInput, sender, history, partySheets, actorSheet };
+  const campaignId =
+    typeof body.campaignId === 'string' && body.campaignId.trim()
+      ? body.campaignId.trim()
+      : null;
+
+  const reactiveState = parseCampaignState(body.reactiveState);
+
+  return { playerInput, sender, history, partySheets, actorSheet, campaignId, reactiveState };
 }
 
 /** Gemini requires strict user/model alternation. */
@@ -128,7 +145,7 @@ function buildGeminiContents(
 }
 
 function publicErrorReply(fallback: string): NextResponse {
-  return NextResponse.json({ reply: fallback });
+  return NextResponse.json({ reply: fallback, statePatch: null });
 }
 
 export async function POST(req: Request) {
@@ -140,8 +157,17 @@ export async function POST(req: Request) {
       rawBody = null;
     }
 
-    const { playerInput, sender, history, partySheets, actorSheet } =
+    const { playerInput, sender, history, partySheets, actorSheet, campaignId, reactiveState } =
       reconstructPayload(rawBody);
+
+    const campaign = getCampaign(campaignId);
+    const campaignBlock = campaign
+      ? formatCampaignBible(campaign)
+      : 'No campaign selected — run a flexible dark-fantasy table that still tracks consequences.';
+
+    const liveStateBlock = reactiveState
+      ? formatStateForGm(reactiveState)
+      : 'No reactive state yet. Invent lightly, then emit a STATE patch to seed flags/heat/clocks.';
 
     const systemInstruction = `[IDENTITY]
 You are the Void Arbiter — a world-class Dungeon Master for a private table of three: Aden, Edward, and Jamie. You run vivid, mechanically coherent D&D 5e-style play with sharp sensory detail, living NPCs, and consequential stakes. Humor and adult/chaotic energy are welcome when the table pushes there — never lecture, never moralize, never break character into chatbot voice.
@@ -151,6 +177,28 @@ You are the Void Arbiter — a world-class Dungeon Master for a private table of
 - If fiction conflicts with a sheet, the sheet wins.
 - Do not invent new class features that contradict the sheet; you may narrate existing features vividly.
 
+[CAMPAIGN BIBLE]
+${campaignBlock}
+
+[LIVE WORLD STATE — EVERYTHING MATTERS]
+${liveStateBlock}
+
+Treat flags, faction heat, clocks, NPC memory, and location state as durable truth.
+When player actions change the world, update those systems. Heat should move when factions are helped/hurt. Clocks advance when time/pressure ticks. NPC memory records what they witnessed. Location state shifts when a place changes.
+
+[STATE PATCH PROTOCOL]
+After your narrative (not inside it), if anything material changed, append exactly one fenced patch:
+
+<<<STATE
+{"flags":{"example":true},"heat":{"faction_id":2},"clocks":{"clock_id":{"filled":3,"segments":8,"name":"Clock Name"}},"npcMemory":{"npc_id":["note"]},"locationState":{"loc_id":"status"},"lastConsequence":"One sentence consequence."}
+STATE>>>
+
+Rules for the patch:
+- Only include keys that changed (partial patch).
+- clocks entries must include filled, segments, and name.
+- npcMemory values are arrays of short notes (newest last); send only the new note(s) for that NPC.
+- Never put the STATE block mid-sentence. Players must not see raw JSON.
+
 [ACTIVE ACTOR SHEET]
 ${actorSheet}
 
@@ -158,12 +206,14 @@ ${actorSheet}
 ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n') : 'Roster incoming from table state.'}
 
 [CRAFT]
-1. Describe the environment with concrete detail (light, smell, sound, tactical geometry).
-2. Resolve actions with 5e-flavored rulings: name the check/save, suggest a DC, ask for d20 + relevant mod when risk matters.
-3. Failures create complications and new angles — not brick walls.
-4. Keep momentum: end by spotlighting one specific player with a clear question or choice.
-5. Target length: usually 120–220 words when a scene deserves it; shorter for quick beats.
-6. Ban corporate filler ("In a world...", "Delve into...", "A wave of emotion..."). Speak like a legendary tabletop storyteller.`;
+1. Stay inside this campaign's tone and voice bible.
+2. Describe the environment with concrete detail (light, smell, sound, tactical geometry).
+3. Resolve actions with 5e-flavored rulings: name the check/save, suggest a DC, ask for d20 + relevant mod when risk matters.
+4. Failures create complications and new angles — not brick walls.
+5. Keep momentum: end by spotlighting one specific player with a clear question or choice.
+6. Target length: usually 120–220 words when a scene deserves it; shorter for quick beats.
+7. Ban corporate filler ("In a world...", "Delve into...", "A wave of emotion..."). Speak like a legendary tabletop storyteller.
+8. Honor campaign GM directives above general improvisation.`;
 
     const geminiApiKey = getGeminiApiKey();
     if (!geminiApiKey) {
@@ -194,7 +244,7 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
           contents,
           generationConfig: {
             temperature: 0.78,
-            maxOutputTokens: 900,
+            maxOutputTokens: 1100,
           },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -247,11 +297,12 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
       );
     }
 
-    return NextResponse.json({ reply: replyText });
+    const { cleanReply, patch } = extractStatePatch(replyText);
+    return NextResponse.json({ reply: cleanReply, statePatch: patch });
   } catch (error) {
     console.error('API Pipeline Crash:', error);
     return NextResponse.json(
-      { reply: 'The matrix caught fire. Try that crazy action one more time.' },
+      { reply: 'The matrix caught fire. Try that crazy action one more time.', statePatch: null },
       { status: 500 }
     );
   }
