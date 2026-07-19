@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Voidline VTT',
-  description: 'Uncensored multi-user AI tabletop framework for Aden, Edward, and Jamie.',
+  title: 'Voidline',
+  description: 'Private couch-coop tabletop for Aden, Edward, and Jamie.',
 };
 
 export default function RootLayout({

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import CharacterSetup, { type ForgeJoinPayload } from '@/components/CharacterSetup';
+import GameStage from '@/components/aaa/GameStage';
 import DiceResultBadge from '@/components/tabletop/DiceResultBadge';
 import DraggableToken from '@/components/tabletop/DraggableToken';
 import ReactiveStateStrip from '@/components/tabletop/ReactiveStateStrip';
@@ -65,6 +66,7 @@ import {
 import {
   playDiceClack,
   playFanfareTick,
+  playScreenPunch,
   playWaxStamp,
   playWhisperRustle,
   setTableSfxMuted,
@@ -101,8 +103,8 @@ export default function GameRoomPage({ params }: { params: { code: string } }) {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen tabletop-shell flex items-center justify-center font-display text-sm tracking-[0.35em] uppercase text-[#c4a574] animate-pulse">
-          Unfurling the campaign board…
+        <div className="min-h-screen tabletop-shell flex items-center justify-center loading-ember text-sm">
+          Lighting the table…
         </div>
       }
     >
@@ -135,6 +137,7 @@ function GameRoom({ params }: { params: { code: string } }) {
   } | null>(null);
   const [sfxMuted, setSfxMuted] = useState(false);
   const [lastSpeaker, setLastSpeaker] = useState<string | null>(null);
+  const [screenPunch, setScreenPunch] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
@@ -546,6 +549,9 @@ function GameRoom({ params }: { params: { code: string } }) {
         setFanfareEvents(events);
         playFanfareTick();
         playWaxStamp();
+        playScreenPunch();
+        setScreenPunch(true);
+        window.setTimeout(() => setScreenPunch(false), 320);
       }
     }
     reactivePrevRef.current = next;
@@ -1190,8 +1196,8 @@ function GameRoom({ params }: { params: { code: string } }) {
 
   if (!game) {
     return (
-      <div className="min-h-screen tabletop-shell flex items-center justify-center font-display text-sm tracking-[0.35em] uppercase text-[#c4a574] animate-pulse">
-        Unfurling the campaign board…
+      <div className="min-h-screen tabletop-shell flex items-center justify-center loading-ember text-sm">
+        Lighting the table…
       </div>
     );
   }
@@ -1230,8 +1236,16 @@ function GameRoom({ params }: { params: { code: string } }) {
   );
 
   return (
+    <GameStage
+      className={`tabletop-shell text-[#f0e2c4] ${dressClass}`}
+      campaignId={campaign?.id}
+      ambient
+      muted={sfxMuted}
+    >
     <div
-      className={`min-h-screen tabletop-shell overflow-hidden antialiased select-none relative text-[#f0e2c4] ${dressClass}`}
+      className={`min-h-screen overflow-hidden antialiased select-none relative ${
+        screenPunch ? 'screen-punch' : ''
+      }`}
     >
       <canvas ref={canvasRef} className="absolute inset-0 z-50 pointer-events-none" />
 
@@ -1242,12 +1256,12 @@ function GameRoom({ params }: { params: { code: string } }) {
 
       {/* Room gloom */}
       <div
-        className="absolute inset-0 bg-cover bg-center opacity-35 ken-burns plate-ink"
+        className="absolute inset-0 bg-cover bg-center opacity-38 parallax-drift plate-ink"
         style={{ backgroundImage: `url(${mapArt})` }}
         aria-hidden
       />
-      <div className="absolute inset-0 bg-[#120c08]/78" />
-      <div className="absolute inset-0 bg-gradient-to-t from-[#120c08] via-transparent to-[#120c08]/85" />
+      <div className="absolute inset-0 bg-[#120c08]/80" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#120c08] via-transparent to-[#120c08]/88" />
       <div className="absolute left-8 top-24 w-40 h-40 torch-glow" />
       <div className="absolute right-10 bottom-40 w-48 h-48 torch-glow" />
 
@@ -1666,5 +1680,6 @@ function GameRoom({ params }: { params: { code: string } }) {
         />
       )}
     </div>
+    </GameStage>
   );
 }

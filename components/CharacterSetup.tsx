@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
+import GameStage from '@/components/aaa/GameStage';
 import { CHARACTER_TEMPLATES, getTemplate } from '@/lib/character-presets';
 import { portraitForPlayer } from '@/lib/game-art';
 import {
@@ -15,6 +16,7 @@ import {
   type CharacterSheet,
 } from '@/lib/character-sheet';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { playPageTurn, playWaxStamp } from '@/lib/table-sfx';
 import type { AbilityScores } from '@/types/database';
 
 export type ForgeJoinPayload = {
@@ -95,6 +97,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
 
   const openSheetFromTemplate = (id: string) => {
     applyTemplate(id);
+    playPageTurn();
     setStage('sheet');
   };
 
@@ -136,6 +139,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
     if (!name.trim()) return;
     setBusy(true);
     setSeedError(null);
+    playWaxStamp();
     try {
       const draft = sheetFromTemplate(template, {
         name: name.trim(),
@@ -214,6 +218,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
       setIdeals(data.draft.ideals);
       setBonds(data.draft.bonds);
       setFlaws(data.draft.flaws);
+      playPageTurn();
       setStage('sheet');
     } catch (error) {
       setSeedError(error instanceof Error ? error.message : 'AI forge failed');
@@ -225,20 +230,21 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
   /* —— Full character sheet —— */
   if (stage === 'sheet') {
     return (
-      <div className="fixed inset-0 z-50 sheet-room overflow-y-auto custom-scrollbar">
+      <GameStage className="sheet-room" skipBoot ambient={false}>
+      <div className="fixed inset-0 z-50 overflow-y-auto custom-scrollbar">
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-30 plate-ink ken-burns"
+          className="absolute inset-0 bg-cover bg-center opacity-28 plate-ink parallax-drift"
           style={{
             backgroundImage:
               'url(https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2400&q=80)',
           }}
           aria-hidden
         />
-        <div className="absolute inset-0 bg-[#120c08]/80" />
+        <div className="absolute inset-0 bg-[#120c08]/82" />
         <div className="absolute left-8 top-16 w-40 h-40 torch-glow" />
         <div className="absolute right-10 bottom-20 w-48 h-48 torch-glow" />
 
-        <div className="relative z-10 mx-auto max-w-5xl px-3 sm:px-5 py-4 sm:py-6">
+        <div className="relative z-10 mx-auto max-w-5xl px-3 sm:px-5 py-4 sm:py-6 sheet-unfurl">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3 text-[#b8965c]">
             <button
               type="button"
@@ -485,22 +491,24 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
           </div>
         </div>
       </div>
+      </GameStage>
     );
   }
 
   /* —— Arrive / pick / AI gate —— */
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sheet-room">
+    <GameStage className="sheet-room" skipBoot ambient={false}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-cover bg-center opacity-35 plate-ink"
+        className="absolute inset-0 bg-cover bg-center opacity-32 plate-ink parallax-drift"
         style={{
           backgroundImage:
             'url(https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2400&q=80)',
         }}
       />
-      <div className="absolute inset-0 bg-[#120c08]/78" />
+      <div className="absolute inset-0 bg-[#120c08]/80" />
 
-      <div className="dnd-sheet relative max-w-lg w-full p-5 sm:p-7 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+      <div className="dnd-sheet relative max-w-lg w-full p-5 sm:p-7 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar gate-stage-inner">
         <div>
           <h2 className="font-display text-2xl text-[#2a160e]">
             {stage === 'arrive' && 'Take your seat'}
@@ -656,5 +664,6 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
         )}
       </div>
     </div>
+    </GameStage>
   );
 }
