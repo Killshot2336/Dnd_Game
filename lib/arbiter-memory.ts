@@ -52,6 +52,13 @@ export function readArbiterMemory(stateData: unknown): ArbiterMemory {
     highlights: Array.isArray(source.highlights)
       ? (source.highlights as ArbiterHighlight[])
           .filter((h) => h && typeof h.title === 'string')
+          .map((h, i) => ({
+            id: typeof h.id === 'string' && h.id ? h.id : `hl-${i}-${h.title}`,
+            title: String(h.title),
+            detail: String(h.detail ?? ''),
+            who: String(h.who ?? 'the table'),
+            at: typeof h.at === 'string' ? h.at : new Date().toISOString(),
+          }))
           .slice(0, 16)
       : [],
     sessionSpine: Array.isArray(source.sessionSpine)

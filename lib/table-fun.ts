@@ -160,13 +160,37 @@ export function parseRollMessage(content: string): {
 
 export type DiceOutcome = 'crit_success' | 'success' | 'fail' | 'crit_fail' | 'plain';
 
-/** Grade a d20-style roll against an optional DC. Natural 20/1 inferred from face values. */
+/** Natural 1/20 only count on an actual d20 term, not damage dice. */
+export function naturalD20Face(result: RollResult): number | undefined {
+  // Prefer a dedicated d20 term face from the expression parse when available.
+  // RollResult.rolls stores signed faces in term order; look for a d20 in expression.
+  const hasD20 = /\d*d20\b/i.test(result.expression);
+  if (!hasD20) return undefined;
+
+  // For simple 1d20[+mod] the first absolute face is the d20.
+  // For pools like 1d20+1d4, the first die in expression order is typically the d20.
+  const d20TermMatch = result.expression.match(/([+-]?)(\d*)d20/i);
+  if (!d20TermMatch) return undefined;
+  const count = Math.max(1, parseInt(d20TermMatch[2] || '1', 10));
+  // Take the first |count| absolute faces that correspond to the leading d20 chunk
+  // when d20 is the first term; otherwise scan for a 1 or 20 among early faces.
+  if (/^[+-]?\d*d20/i.test(result.expression.replace(/^\+/, ''))) {
+    const face = Math.abs(result.rolls[0] ?? 0);
+    return face || undefined;
+  }
+  // Mixed order — if any single d20 face is 1 or 20, prefer 20 over 1 when both somehow present
+  const faces = result.rolls.map((r) => Math.abs(r)).slice(0, count);
+  if (faces.includes(20)) return 20;
+  if (faces.includes(1)) return 1;
+  return faces[0];
+}
+
+/** Grade a d20-style roll against an optional DC. Natural 20/1 only from d20. */
 export function gradeRollOutcome(
   result: RollResult,
   dc?: number
 ): { outcome: DiceOutcome; margin?: number } {
-  const faces = result.rolls.map((r) => Math.abs(r));
-  const natural = faces.length === 1 ? faces[0] : undefined;
+  const natural = naturalD20Face(result);
   const effectiveDc = dc ?? result.dc;
 
   if (effectiveDc == null) {
@@ -180,6 +204,15 @@ export function gradeRollOutcome(
   if (natural === 1) return { outcome: 'crit_fail', margin };
   if (result.total >= effectiveDc) return { outcome: 'success', margin };
   return { outcome: 'fail', margin };
+}
+
+/** True when this roll should bind to a pending skill check (not bare damage). */
+export function rollBindsPendingCheck(result: RollResult): boolean {
+  if (result.dc != null) return true;
+  if (result.note && /DC\s*\d+/i.test(result.note)) return true;
+  // Annotated ability/check rolls without explicit DC still bind if they look like checks
+  if (result.label && /\d*d20/i.test(result.expression)) return true;
+  return false;
 }
 
 /** Whisper: /w Name message  or  /whisper Name message */

@@ -27,9 +27,11 @@
 
 html,
 body {
-  min-height: var(--app-height);
-  height: var(--app-height);
-  overflow: hidden;
+  min-height: var(--app-height, 100dvh);
+  height: var(--app-height, 100dvh);
+  /* Allow gate/forge to scroll; chamber locks itself */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* Full-bleed shells use the live viewport */

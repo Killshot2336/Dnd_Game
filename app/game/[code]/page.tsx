@@ -47,6 +47,7 @@ import {
 import {
   abilityModifier,
   compactSheetForGm,
+  sheetFromSnapshot,
   sheetSnapshot,
   type CharacterSheet,
 } from '@/lib/character-sheet';
@@ -81,6 +82,7 @@ import {
   parseWhisper,
   parseWhisperMessage,
   resolveRoll,
+  rollBindsPendingCheck,
   type RollResult,
 } from '@/lib/table-fun';
 import {
@@ -225,6 +227,17 @@ function GameRoom({ params }: { params: { code: string } }) {
       const hardened = normalizePlayer(player as unknown as Record<string, unknown>) ?? player;
       setCurrentPlayer(hardened);
       setPlayers((prev) => mergePlayerLedger(prev, hardened));
+      const restoredSheet = sheetFromSnapshot(
+        hardened.sheet_snapshot as Record<string, unknown> | undefined,
+        {
+          name: hardened.user_name,
+          maxHp: hardened.max_hp,
+          stats: hardened.stats,
+        }
+      );
+      if (restoredSheet) {
+        setActiveSheet(restoredSheet);
+      }
       writeCachedPlayerSeat({
         gameId: hardened.game_id,
         sessionCode: session,
@@ -383,15 +396,14 @@ function GameRoom({ params }: { params: { code: string } }) {
             if (!incoming || incoming.game_id !== gameId) return;
             setMessages((prev) => mergeMessageLedger(prev, incoming));
 
-            if (
-              incoming.sender !== 'GM' &&
-              incoming.sender !== currentPlayerNameRef.current
-            ) {
-              triggerDiceFromUser(incoming.sender);
-            }
-
             const roll = parseRollMessage(incoming.content ?? '');
             if (roll) {
+              if (
+                incoming.sender !== 'GM' &&
+                incoming.sender !== currentPlayerNameRef.current
+              ) {
+                triggerDiceFromUser(incoming.sender);
+              }
               setDiceBadge({
                 sender: roll.sender,
                 result: {
@@ -456,12 +468,13 @@ function GameRoom({ params }: { params: { code: string } }) {
           const baseState = campaignId
             ? buildInitialStateData(campaignId as 'ashcrown' | 'saltwake' | 'blackroot')
             : { campaignId: null, reactive: null };
-          const stateData = writeTableMeta(baseState as Record<string, unknown>, {
-            openingPosted: true,
-          });
           const opening =
             campaign?.openingNarrative ??
             'The dynamic void initializes. Welcome, degenerates.';
+          // Mark openingPosted only after the chronicle line lands
+          const stateData = writeTableMeta(baseState as Record<string, unknown>, {
+            openingPosted: false,
+          });
 
           const { data: newGame, error: insertError } = await supabase
             .from('games')
@@ -489,7 +502,7 @@ function GameRoom({ params }: { params: { code: string } }) {
             }
           } else {
             gameData = newGame;
-            // Session open ritual — first chronicle ink
+            // Session open ritual — first chronicle ink, then seal openingPosted
             try {
               await supabase.from('messages').insert([
                 {
@@ -498,6 +511,15 @@ function GameRoom({ params }: { params: { code: string } }) {
                   content: opening,
                 },
               ]);
+              const sealed = writeTableMeta(
+                (newGame.state_data as Record<string, unknown>) ?? stateData,
+                { openingPosted: true }
+              );
+              await supabase
+                .from('games')
+                .update({ state_data: sealed })
+                .eq('id', newGame.id);
+              gameData = { ...newGame, state_data: sealed };
             } catch (openError) {
               console.error('Opening ritual message failed:', openError);
             }
@@ -685,10 +707,24 @@ function GameRoom({ params }: { params: { code: string } }) {
     if (!game?.id || openingLockRef.current) return;
     const meta = readTableMeta(game.state_data);
     if (meta.openingPosted) return;
+
+    // Messages already exist (race / partial create) — seal the flag so cold open can run
     if (messages.length > 0) {
       openingLockRef.current = true;
+      const sealed = writeTableMeta(game.state_data, { openingPosted: true });
+      setGame((prev) => (prev ? { ...prev, state_data: sealed } : prev));
+      void (async () => {
+        try {
+          const supabase = getSupabaseBrowserClient();
+          await supabase.from('games').update({ state_data: sealed }).eq('id', game.id);
+        } catch (error) {
+          console.error('Opening flag seal failed:', error);
+          openingLockRef.current = false;
+        }
+      })();
       return;
     }
+
     const campaign = getCampaign(
       typeof game.state_data?.campaignId === 'string'
         ? (game.state_data.campaignId as string)
@@ -1083,11 +1119,21 @@ function GameRoom({ params }: { params: { code: string } }) {
   );
 
   // Cold open when returning to a remembered table (opening already posted)
+  // Host seat only — first player by created_at — to avoid duplicate posts
   useEffect(() => {
     if (!game?.id || !currentPlayer || coldOpenLockRef.current) return;
     const meta = readTableMeta(game.state_data);
     if (!meta.openingPosted) return;
     if (messages.length < 1) return;
+
+    const hostId = [...players].sort((a, b) =>
+      String(a.created_at).localeCompare(String(b.created_at))
+    )[0]?.id;
+    if (hostId && hostId !== currentPlayer.id) {
+      coldOpenLockRef.current = true;
+      return;
+    }
+
     const memory = readArbiterMemory(game.state_data);
     if (!shouldOfferColdOpen(memory)) {
       coldOpenLockRef.current = true;
@@ -1105,8 +1151,10 @@ function GameRoom({ params }: { params: { code: string } }) {
     coldOpenLockRef.current = true;
     const run = async () => {
       try {
+        // Claim the cold open in state first so other clients see lastColdOpenAt
+        const claimedAt = new Date().toISOString();
         const nextData = writeArbiterMemory(game.state_data, {
-          lastColdOpenAt: new Date().toISOString(),
+          lastColdOpenAt: claimedAt,
         });
         setGame((prev) => (prev ? { ...prev, state_data: nextData } : prev));
         const supabase = getSupabaseBrowserClient();
@@ -1118,7 +1166,7 @@ function GameRoom({ params }: { params: { code: string } }) {
       }
     };
     void run();
-  }, [game, currentPlayer, messages.length, postTableMessage]);
+  }, [game, currentPlayer, messages.length, players, postTableMessage]);
 
   const handleTokenDrag = useCallback(
     (name: string, pos: TokenTablePos) => {
@@ -1143,6 +1191,7 @@ function GameRoom({ params }: { params: { code: string } }) {
       rollOutcome?: RollOutcomePayload;
       playerMessageContent?: string;
       skipPlayerMessage?: boolean;
+      historyExtra?: { sender: string; content: string }[];
     }) => {
       if (!game) return;
       const {
@@ -1154,6 +1203,7 @@ function GameRoom({ params }: { params: { code: string } }) {
         rollOutcome,
         playerMessageContent,
         skipPlayerMessage,
+        historyExtra,
       } = opts;
 
       const displayPlayer = playerMessageContent ?? playerInput;
@@ -1182,9 +1232,12 @@ function GameRoom({ params }: { params: { code: string } }) {
         }
       }
 
-      const historySource = optimisticPlayerMsg
-        ? messages.concat(optimisticPlayerMsg)
-        : messages;
+      const historySource = [
+        ...(optimisticPlayerMsg
+          ? messages.concat(optimisticPlayerMsg)
+          : messages),
+        ...(historyExtra ?? []),
+      ];
       const activeHistory = historySource
         .map((message) => ({
           sender: message?.sender ?? 'Unknown',
@@ -1312,60 +1365,97 @@ function GameRoom({ params }: { params: { code: string } }) {
       const optimisticGmMsg = createOptimisticMessage(activeGameId, 'GM', gmReply);
       setMessages((prev) => mergeMessageLedger(prev, optimisticGmMsg));
 
-      let nextStateData = (game.state_data ?? {}) as Record<string, unknown>;
-      if (statePatch && mode !== 'buddy') {
-        nextStateData = applyReactivePatch(nextStateData, statePatch);
-      } else if (statePatch && mode === 'buddy') {
-        // Buddy may still touch light memory STATE — allow small patches
-        nextStateData = applyReactivePatch(nextStateData, statePatch);
-      }
+      // Build next state from current snapshot (React setState updater may double-fire)
+      const base = (game.state_data ?? {}) as Record<string, unknown>;
+      let nextStateData = { ...base };
+      let startedClash = false;
 
-      const vaultMerged = mergeProtocolIntoVault(readVaultRoom(nextStateData), protocol);
-      if (protocol.loot && protocol.loot.length > 0) {
-        await postTableMessage(
-          'Chronicle',
-          `Loot surfaces:\n${protocol.loot.map((item) => `• ${item}`).join('\n')}`
-        );
-      }
-      nextStateData = writeVaultRoom(nextStateData, vaultMerged);
-
-      const memoryNext = mergeMemoryPatch(
-        readArbiterMemory(nextStateData),
-        protocol.memory
-      );
-      nextStateData = writeArbiterMemory(nextStateData, memoryNext);
-
-      if (protocol.titleCard) setLocalTitleDismissed(null);
-
-      if (protocol.clashStart && protocol.clashStart.length > 0) {
-        let clash = vaultMerged.clash;
-        for (const player of players) {
-          clash = ensureClashCombatant(
-            clash,
-            player.user_name,
-            Math.max(1, player.max_hp || 10)
+      if (mode === 'buddy') {
+        if (protocol.memory) {
+          const memoryNext = mergeMemoryPatch(
+            readArbiterMemory(nextStateData),
+            protocol.memory
           );
-          clash = {
-            ...clash,
-            combatants: clash.combatants.map((c) =>
-              c.name.toLowerCase() === player.user_name.toLowerCase()
-                ? {
-                    ...c,
-                    hp: Math.max(0, player.current_hp ?? c.hp),
-                    maxHp: Math.max(1, player.max_hp || c.maxHp),
-                  }
-                : c
-            ),
-          };
+          nextStateData = writeArbiterMemory(nextStateData, memoryNext);
         }
-        nextStateData = writeVaultRoom(nextStateData, { clash });
+      } else {
+        if (statePatch) {
+          nextStateData = applyReactivePatch(nextStateData, statePatch);
+        }
+        const vaultMerged = mergeProtocolIntoVault(
+          readVaultRoom(nextStateData),
+          protocol
+        );
+        nextStateData = writeVaultRoom(nextStateData, vaultMerged);
+        const memoryNext = mergeMemoryPatch(
+          readArbiterMemory(nextStateData),
+          protocol.memory
+        );
+        nextStateData = writeArbiterMemory(nextStateData, memoryNext);
+
+        if (protocol.clashStart && protocol.clashStart.length > 0) {
+          let clash = vaultMerged.clash;
+          for (const player of players) {
+            clash = ensureClashCombatant(
+              clash,
+              player.user_name,
+              Math.max(1, player.max_hp || 10)
+            );
+            clash = {
+              ...clash,
+              combatants: clash.combatants.map((c) =>
+                c.name.toLowerCase() === player.user_name.toLowerCase()
+                  ? {
+                      ...c,
+                      hp: Math.max(0, player.current_hp ?? c.hp),
+                      maxHp: Math.max(1, player.max_hp || c.maxHp),
+                    }
+                  : c
+              ),
+            };
+          }
+          nextStateData = writeVaultRoom(nextStateData, { clash });
+          startedClash = true;
+        }
+      }
+
+      setGame((prev) => {
+        if (!prev) return prev;
+        // Re-merge vault/table keys that may have landed during the fetch
+        const live = (prev.state_data ?? {}) as Record<string, unknown>;
+        const merged = {
+          ...live,
+          ...nextStateData,
+          table: live.table ?? nextStateData.table,
+          vault: nextStateData.vault ?? live.vault,
+          arbiter: nextStateData.arbiter ?? live.arbiter,
+          reactive: nextStateData.reactive ?? live.reactive,
+        };
+        nextStateData = merged;
+        return {
+          ...prev,
+          current_narrative: gmReply,
+          state_data: merged,
+        };
+      });
+
+      if (startedClash) {
         playSteelScrape();
         setClashBang(true);
         window.setTimeout(() => setClashBang(false), 500);
       }
 
+      if (protocol.titleCard && mode !== 'buddy') setLocalTitleDismissed(null);
+
+      if (protocol.loot && protocol.loot.length > 0 && mode !== 'buddy') {
+        await postTableMessage(
+          'Chronicle',
+          `Loot surfaces:\n${protocol.loot.map((item) => `• ${item}`).join('\n')}`
+        );
+      }
+
       const supabase = getSupabaseBrowserClient();
-      if (protocol.harm && protocol.harm.length > 0) {
+      if (protocol.harm && protocol.harm.length > 0 && mode !== 'buddy') {
         for (const h of protocol.harm) {
           const target = players.find(
             (p) =>
@@ -1387,16 +1477,6 @@ function GameRoom({ params }: { params: { code: string } }) {
           }
         }
       }
-
-      setGame((prev) =>
-        prev
-          ? {
-              ...prev,
-              current_narrative: gmReply,
-              state_data: nextStateData,
-            }
-          : prev
-      );
 
       try {
         const { error: gmMsgError } = await supabase.from('messages').insert([
@@ -1459,15 +1539,27 @@ function GameRoom({ params }: { params: { code: string } }) {
       setLastSpeaker(senderName);
       await postTableMessage(senderName, content);
 
-      // Honest dice: if there's a DC (or pending check), Arbiter narrates the outcome
+      // Honest dice: only bind pending checks to annotated/d20 check rolls — never bare damage
       const vaultNow = readVaultRoom(game.state_data);
-      const pending = vaultNow.pendingChecks[0];
-      const dc = result.dc ?? pending?.dc;
-      const label = result.label ?? pending?.label;
-      const ability = result.ability ?? pending?.ability;
+      const bindsCheck = rollBindsPendingCheck(result);
+      const pending = bindsCheck ? vaultNow.pendingChecks[0] : undefined;
+      const dc = result.dc ?? (bindsCheck ? pending?.dc : undefined);
+      const label = result.label ?? (bindsCheck ? pending?.label : undefined);
+      const ability = result.ability ?? (bindsCheck ? pending?.ability : undefined);
       const graded = gradeRollOutcome(result, dc);
 
-      if (dc != null || graded.outcome === 'crit_success' || graded.outcome === 'crit_fail') {
+      const shouldResolve =
+        dc != null ||
+        (bindsCheck &&
+          (graded.outcome === 'crit_success' ||
+            graded.outcome === 'crit_fail' ||
+            graded.outcome === 'success' ||
+            graded.outcome === 'fail')) ||
+        (!bindsCheck &&
+          (graded.outcome === 'crit_success' || graded.outcome === 'crit_fail') &&
+          /\d*d20/i.test(result.expression));
+
+      if (shouldResolve) {
         if (pending) {
           persistVaultPatch({
             pendingChecks: vaultNow.pendingChecks.filter((c) => c.id !== pending.id),
@@ -1495,6 +1587,7 @@ function GameRoom({ params }: { params: { code: string } }) {
             activeGameId,
             rollOutcome,
             skipPlayerMessage: true,
+            historyExtra: [{ sender: senderName, content }],
           });
         } finally {
           setIsGMLoading(false);
@@ -1609,11 +1702,7 @@ function GameRoom({ params }: { params: { code: string } }) {
     const mod = abilityModifier(score);
     const expr = `1d20${mod >= 0 ? `+${mod}` : mod}`;
     playDiceClack();
-    persistVaultPatch({
-      pendingChecks: readVaultRoom(game?.state_data).pendingChecks.filter(
-        (c) => c.id !== check.id
-      ),
-    });
+    // Keep the check pending until the annotated roll is sealed
     setInputMessage(
       `/roll ${expr} (${ability} · ${check.label} · DC ${check.dc})`
     );

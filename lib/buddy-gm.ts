@@ -32,8 +32,7 @@ export function parseBuddyCommand(text: string): BuddyRequest | null {
   ) {
     kind = 'remember';
   } else if (
-    /\b(lol|lmao|haha|joke|roast|banter|dude|bro|buddy)\b/.test(lower) ||
-    body.length < 40
+    /\b(lol|lmao|haha|joke|roast|banter|dude|bro|buddy)\b/.test(lower)
   ) {
     kind = 'banter';
   }

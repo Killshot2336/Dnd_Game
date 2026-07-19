@@ -25,7 +25,9 @@ export default function PendingChecks({
             onClick={() => onRoll(check)}
             className="vault-check-chip"
           >
-            <span className="vault-check-ability">{check.ability.slice(0, 3)}</span>
+            <span className="vault-check-ability">
+              {(check.ability || 'dex').slice(0, 3)}
+            </span>
             <span className="vault-check-dc">DC {check.dc}</span>
             <span className="vault-check-label">{check.label}</span>
             {check.target && check.target !== 'anyone' ? (

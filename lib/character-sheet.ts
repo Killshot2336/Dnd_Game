@@ -225,6 +225,53 @@ export function sheetSnapshot(sheet: CharacterSheet) {
   };
 }
 
+/** Rebuild a playable sheet from a player seat snapshot (refresh / reclaim). */
+export function sheetFromSnapshot(
+  snap: Record<string, unknown> | null | undefined,
+  fallback?: { name?: string; maxHp?: number; stats?: AbilityScores }
+): CharacterSheet | null {
+  if (!snap || typeof snap !== 'object') return null;
+  const name = String(snap.name ?? fallback?.name ?? '').trim();
+  if (!name) return null;
+
+  const skinRaw =
+    snap.skin && typeof snap.skin === 'object'
+      ? (snap.skin as Record<string, unknown>)
+      : {};
+
+  return {
+    seed: normalizeSeed(String(snap.seed ?? generateCharacterSeed())),
+    name,
+    templateId: String(snap.templateId ?? ''),
+    race: String(snap.race ?? 'Human'),
+    className: String(snap.className ?? 'Adventurer'),
+    subclass: String(snap.subclass ?? ''),
+    background: String(snap.background ?? ''),
+    level: typeof snap.level === 'number' ? snap.level : 1,
+    stats: parseStats(snap.stats ?? fallback?.stats),
+    skills: Array.isArray(snap.skills) ? snap.skills.map(String) : [],
+    features: Array.isArray(snap.features) ? snap.features.map(String) : [],
+    equipment: Array.isArray(snap.equipment) ? snap.equipment.map(String) : [],
+    backstory: String(snap.backstory ?? ''),
+    appearance: String(snap.appearance ?? ''),
+    ideals: String(snap.ideals ?? ''),
+    bonds: String(snap.bonds ?? ''),
+    flaws: String(snap.flaws ?? ''),
+    skin: {
+      portraitKey: String(skinRaw.portraitKey ?? 'Adventurer'),
+      tint: String(skinRaw.tint ?? '#c4a574'),
+    },
+    maxHp:
+      typeof snap.maxHp === 'number'
+        ? snap.maxHp
+        : typeof fallback?.maxHp === 'number'
+          ? fallback.maxHp
+          : 12,
+    armorClass: typeof snap.armorClass === 'number' ? snap.armorClass : 12,
+    speed: typeof snap.speed === 'number' ? snap.speed : 30,
+  };
+}
+
 export function compactSheetForGm(sheet: CharacterSheet | null | undefined): string {
   if (!sheet) return 'No sheet.';
   return [

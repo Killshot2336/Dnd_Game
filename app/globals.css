@@ -19,13 +19,15 @@
 
 html,
 body {
-  min-height: 100%;
+  /* Prefer live viewport height from responsive.css */
+  min-height: var(--app-height, 100dvh);
 }
 
 body {
   background-color: var(--void-ink);
   color: #f0e2c4;
   font-family: 'IM Fell English', Georgia, serif;
+  /* height owned by responsive.css --app-height */
 }
 
 .font-display {
@@ -687,8 +689,7 @@ body {
 }
 
 .room-split {
-  /* Layout owned by responsive.css */
-  display: grid;
+  /* Layout owned exclusively by responsive.css */
 }
 
 /* —— Official-feel D&D character sheet —— */
@@ -893,7 +894,7 @@ body {
   right: 0;
   height: clamp(0px, 4vh, 36px);
   background: #050302;
-  z-index: 90;
+  z-index: 15;
   pointer-events: none;
 }
 

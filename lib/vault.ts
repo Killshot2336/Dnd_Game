@@ -92,7 +92,15 @@ export function readVaultRoom(stateData: unknown): VaultRoomState {
       ? (source.pendingBeats as VaultBeat[]).filter((b) => b && typeof b.id === 'string')
       : [],
     pendingChecks: Array.isArray(source.pendingChecks)
-      ? (source.pendingChecks as VaultCheck[]).filter((c) => c && typeof c.id === 'string')
+      ? (source.pendingChecks as VaultCheck[])
+          .filter((c) => c && typeof c.id === 'string')
+          .map((c) => ({
+            id: c.id,
+            ability: String(c.ability || 'dexterity'),
+            dc: Number(c.dc) || 12,
+            label: String(c.label || 'Check'),
+            target: c.target ? String(c.target) : undefined,
+          }))
       : [],
     clash: parseClash(source.clash),
     titleCard: parseTitleCard(source.titleCard),

@@ -72,12 +72,12 @@ export default function LevelUpRitual({
                   level: nextLevel,
                   maxHp: sheet.maxHp + Math.max(1, hpGain),
                   features: [
-                    ...sheet.features,
+                    ...(Array.isArray(sheet.features) ? sheet.features : []),
                     `L${nextLevel}: ${lore.label}`,
                   ].slice(0, 12),
-                  appearance: sheet.appearance.includes(lore.label)
+                  appearance: (sheet.appearance || '').includes(lore.label)
                     ? sheet.appearance
-                    : `${sheet.appearance} ${lore.blurb}`.trim().slice(0, 400),
+                    : `${sheet.appearance || ''} ${lore.blurb}`.trim().slice(0, 400),
                 };
                 onConfirm(next, lore.id);
               }}

@@ -121,7 +121,22 @@ export function parseCampaignState(raw: unknown): ReactiveCampaignState | null {
         : {},
     clocks:
       source.clocks && typeof source.clocks === 'object'
-        ? (source.clocks as ReactiveCampaignState['clocks'])
+        ? Object.fromEntries(
+            Object.entries(source.clocks as Record<string, unknown>)
+              .filter(([, clock]) => clock && typeof clock === 'object')
+              .map(([id, clock]) => {
+                const c = clock as Record<string, unknown>;
+                return [
+                  id,
+                  {
+                    name: typeof c.name === 'string' ? c.name : id,
+                    segments:
+                      typeof c.segments === 'number' ? c.segments : 6,
+                    filled: typeof c.filled === 'number' ? c.filled : 0,
+                  },
+                ];
+              })
+          )
         : {},
     npcMemory:
       source.npcMemory && typeof source.npcMemory === 'object'
