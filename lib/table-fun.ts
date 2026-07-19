@@ -10,6 +10,11 @@ export interface ParsedRoll {
   expression: string;
   terms: DiceTerm[];
   modifier: number;
+  /** Optional annotation after the expression, e.g. DEX · Stealth · DC 14 */
+  note?: string;
+  dc?: number;
+  ability?: string;
+  label?: string;
 }
 
 export interface RollResult {
@@ -18,10 +23,14 @@ export interface RollResult {
   modifier: number;
   total: number;
   detail: string;
+  note?: string;
+  dc?: number;
+  ability?: string;
+  label?: string;
 }
 
 const ROLL_RE =
-  /^\/(?:roll|r)\s+([0-9]*d[0-9]+(?:\s*[+-]\s*[0-9]+)*(?:\s*[+-]\s*[0-9]*d[0-9]+)*)\s*$/i;
+  /^\/(?:roll|r)\s+([0-9]*d[0-9]+(?:\s*[+-]\s*[0-9]+)*(?:\s*[+-]\s*[0-9]*d[0-9]+)*)\s*(?:\((.+)\))?\s*$/i;
 
 /** True if the whole message is a dice command (not prose that mentions /roll). */
 export function isRollCommand(text: string): boolean {
@@ -34,6 +43,7 @@ export function parseRollExpression(raw: string): ParsedRoll | null {
   if (!match) return null;
 
   const expression = match[1].replace(/\s+/g, '');
+  const note = match[2]?.trim();
   const chunks = expression.match(/[+-]?[0-9]*d[0-9]+|[+-]?[0-9]+/gi);
   if (!chunks || chunks.length === 0) return null;
 
@@ -57,7 +67,30 @@ export function parseRollExpression(raw: string): ParsedRoll | null {
   }
 
   if (terms.length === 0) return null;
-  return { expression, terms, modifier };
+
+  let dc: number | undefined;
+  let ability: string | undefined;
+  let label: string | undefined;
+  if (note) {
+    const dcMatch = note.match(/DC\s*(\d+)/i);
+    if (dcMatch) dc = parseInt(dcMatch[1], 10);
+    const abilityMatch = note.match(
+      /\b(STR|DEX|CON|INT|WIS|CHA|strength|dexterity|constitution|intelligence|wisdom|charisma)\b/i
+    );
+    if (abilityMatch) ability = abilityMatch[1];
+    label =
+      note
+        .replace(
+          /\b(STR|DEX|CON|INT|WIS|CHA|strength|dexterity|constitution|intelligence|wisdom|charisma)\b/gi,
+          ''
+        )
+        .replace(/DC\s*\d+/gi, '')
+        .replace(/[·•|]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim() || undefined;
+  }
+
+  return { expression, terms, modifier, note, dc, ability, label };
 }
 
 function rollDie(sides: number): number {
@@ -93,11 +126,16 @@ export function resolveRoll(parsed: ParsedRoll): RollResult {
     modifier: parsed.modifier,
     total: sum,
     detail: parts.join(' '),
+    note: parsed.note,
+    dc: parsed.dc,
+    ability: parsed.ability,
+    label: parsed.label,
   };
 }
 
 export function formatRollMessage(sender: string, result: RollResult): string {
-  return `🎲 ${sender} rolls ${result.expression} → ${result.total} (${result.detail})`;
+  const note = result.note ? ` · ${result.note}` : '';
+  return `🎲 ${sender} rolls ${result.expression} → ${result.total} (${result.detail})${note}`;
 }
 
 export function parseRollMessage(content: string): {
@@ -105,15 +143,43 @@ export function parseRollMessage(content: string): {
   expression: string;
   total: number;
   detail: string;
+  note?: string;
 } | null {
-  const match = content.match(/^🎲\s+(.+?)\s+rolls\s+(\S+)\s+→\s+(-?\d+)\s+\((.+)\)\s*$/);
+  const match = content.match(
+    /^🎲\s+(.+?)\s+rolls\s+(\S+)\s+→\s+(-?\d+)\s+\(([^)]+)\)(?:\s+·\s+(.+))?\s*$/
+  );
   if (!match) return null;
   return {
     sender: match[1],
     expression: match[2],
     total: parseInt(match[3], 10),
     detail: match[4],
+    note: match[5],
   };
+}
+
+export type DiceOutcome = 'crit_success' | 'success' | 'fail' | 'crit_fail' | 'plain';
+
+/** Grade a d20-style roll against an optional DC. Natural 20/1 inferred from face values. */
+export function gradeRollOutcome(
+  result: RollResult,
+  dc?: number
+): { outcome: DiceOutcome; margin?: number } {
+  const faces = result.rolls.map((r) => Math.abs(r));
+  const natural = faces.length === 1 ? faces[0] : undefined;
+  const effectiveDc = dc ?? result.dc;
+
+  if (effectiveDc == null) {
+    if (natural === 20) return { outcome: 'crit_success' };
+    if (natural === 1) return { outcome: 'crit_fail' };
+    return { outcome: 'plain' };
+  }
+
+  const margin = result.total - effectiveDc;
+  if (natural === 20) return { outcome: 'crit_success', margin };
+  if (natural === 1) return { outcome: 'crit_fail', margin };
+  if (result.total >= effectiveDc) return { outcome: 'success', margin };
+  return { outcome: 'fail', margin };
 }
 
 /** Whisper: /w Name message  or  /whisper Name message */

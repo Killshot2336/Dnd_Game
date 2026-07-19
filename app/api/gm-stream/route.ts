@@ -1,8 +1,21 @@
 import { NextResponse } from 'next/server';
 import {
+  buildDirectorCraft,
+  classifySceneKind,
+  formatRollOutcomeForGm,
+  MEMORY_PROTOCOL,
+  type ArbiterMode,
+  type RollOutcomePayload,
+} from '@/lib/arbiter-director';
+import {
+  formatMemoryForGm,
+  readArbiterMemory,
+  type ArbiterMemory,
+} from '@/lib/arbiter-memory';
+import { buddyKindPrompt, type BuddyKind } from '@/lib/buddy-gm';
+import {
   formatStateForGm,
   getCampaign,
-  formatCampaignBible,
   parseCampaignState,
   type ReactiveCampaignState,
 } from '@/lib/campaigns';
@@ -58,6 +71,35 @@ function extractReplyText(data: GeminiResponse): string | null {
   return joined.length > 0 ? joined : null;
 }
 
+function parseRollOutcome(raw: unknown): RollOutcomePayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+  if (typeof source.roller !== 'string' || typeof source.total !== 'number') {
+    return null;
+  }
+  const outcome = source.outcome;
+  if (
+    outcome !== 'crit_success' &&
+    outcome !== 'success' &&
+    outcome !== 'fail' &&
+    outcome !== 'crit_fail' &&
+    outcome !== 'plain'
+  ) {
+    return null;
+  }
+  return {
+    roller: source.roller,
+    expression: String(source.expression ?? ''),
+    total: source.total,
+    detail: String(source.detail ?? ''),
+    dc: typeof source.dc === 'number' ? source.dc : undefined,
+    label: typeof source.label === 'string' ? source.label : undefined,
+    ability: typeof source.ability === 'string' ? source.ability : undefined,
+    outcome,
+    margin: typeof source.margin === 'number' ? source.margin : undefined,
+  };
+}
+
 function reconstructPayload(raw: unknown): {
   playerInput: string;
   sender: string;
@@ -66,6 +108,13 @@ function reconstructPayload(raw: unknown): {
   actorSheet: string;
   campaignId: string | null;
   reactiveState: ReactiveCampaignState | null;
+  mode: ArbiterMode;
+  buddyKind: BuddyKind | null;
+  rollOutcome: RollOutcomePayload | null;
+  arbiterMemory: ArbiterMemory;
+  clashActive: boolean;
+  hasPendingChecks: boolean;
+  spotlight: string | null;
 } {
   const body =
     raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : ({} as Record<string, unknown>);
@@ -104,14 +153,49 @@ function reconstructPayload(raw: unknown): {
 
   const reactiveState = parseCampaignState(body.reactiveState);
 
-  return { playerInput, sender, history, partySheets, actorSheet, campaignId, reactiveState };
+  const modeRaw = typeof body.mode === 'string' ? body.mode : 'play';
+  const mode: ArbiterMode =
+    modeRaw === 'buddy' || modeRaw === 'resolve' ? modeRaw : 'play';
+
+  const buddyKind =
+    body.buddyKind === 'ask' ||
+    body.buddyKind === 'help' ||
+    body.buddyKind === 'banter' ||
+    body.buddyKind === 'remember'
+      ? body.buddyKind
+      : null;
+
+  const rollOutcome = parseRollOutcome(body.rollOutcome);
+
+  const arbiterMemory =
+    body.arbiterMemory && typeof body.arbiterMemory === 'object'
+      ? readArbiterMemory({ arbiter: body.arbiterMemory })
+      : readArbiterMemory(body.stateData);
+
+  return {
+    playerInput,
+    sender,
+    history,
+    partySheets,
+    actorSheet,
+    campaignId,
+    reactiveState,
+    mode,
+    buddyKind,
+    rollOutcome,
+    arbiterMemory,
+    clashActive: body.clashActive === true,
+    hasPendingChecks: body.hasPendingChecks === true,
+    spotlight: typeof body.spotlight === 'string' ? body.spotlight : null,
+  };
 }
 
 /** Gemini requires strict user/model alternation. */
 function buildGeminiContents(
   history: HistoryMessage[],
   sender: string,
-  playerInput: string
+  playerInput: string,
+  mode: ArbiterMode
 ): GeminiContent[] {
   const contents: GeminiContent[] = [];
 
@@ -126,14 +210,21 @@ function buildGeminiContents(
     contents.push({ role, parts: [{ text: trimmed }] });
   };
 
-  for (const message of history) {
+  // Buddy / resolve: keep history shorter so help stays snappy
+  const slice = mode === 'buddy' ? history.slice(-8) : history.slice(-14);
+  for (const message of slice) {
     const role = message.sender === 'GM' ? 'model' : 'user';
     push(role, `${message.sender}: ${message.content}`);
   }
 
-  push('user', `${sender}: ${playerInput}`);
+  const prefix =
+    mode === 'buddy'
+      ? '[BUDDY ASK]'
+      : mode === 'resolve'
+        ? '[DICE RESOLVE]'
+        : '[TABLE ACTION]';
+  push('user', `${prefix} ${sender}: ${playerInput}`);
 
-  // Gemini chats must start with a user turn.
   if (contents.length === 0 || contents[0].role !== 'user') {
     contents.unshift({
       role: 'user',
@@ -148,6 +239,39 @@ function publicErrorReply(fallback: string): NextResponse {
   return NextResponse.json({ reply: fallback, statePatch: null });
 }
 
+function focusedCampaignBlock(campaignId: string | null, reactive: ReactiveCampaignState | null): string {
+  const campaign = getCampaign(campaignId);
+  if (!campaign) {
+    return 'No campaign selected — run a flexible dark-fantasy table that still tracks consequences.';
+  }
+
+  // Lean bible: tone + voice + directives + active location/NPC cues
+  const activeLocIds = reactive
+    ? Object.entries(reactive.locationState)
+        .filter(([, status]) => String(status).includes('active'))
+        .map(([id]) => id)
+    : [];
+  const locs =
+    activeLocIds.length > 0
+      ? campaign.locations.filter((l) => activeLocIds.includes(l.id))
+      : campaign.locations.slice(0, 2);
+  const hotNpcs = campaign.npcs.slice(0, 3);
+
+  return [
+    `CAMPAIGN: ${campaign.title} — ${campaign.tagline}`,
+    `TONE: ${campaign.tone}`,
+    `VOICE: ${campaign.voiceBible}`,
+    `THEMES: ${campaign.themes.join(', ')}`,
+    `ACTIVE LOCATIONS:\n${locs
+      .map((l) => `- ${l.name}: ${l.sensory} | threat: ${l.threat} | opp: ${l.opportunity}`)
+      .join('\n')}`,
+    `KEY NPCS:\n${hotNpcs
+      .map((n) => `- ${n.name} (${n.role}): wants ${n.desire}. Tell/voice: ${n.voice}. Secret: ${n.secret}`)
+      .join('\n')}`,
+    `GM DIRECTIVES:\n${campaign.gmDirectives.map((d) => `- ${d}`).join('\n')}`,
+  ].join('\n\n');
+}
+
 export async function POST(req: Request) {
   try {
     let rawBody: unknown = null;
@@ -157,37 +281,87 @@ export async function POST(req: Request) {
       rawBody = null;
     }
 
-    const { playerInput, sender, history, partySheets, actorSheet, campaignId, reactiveState } =
-      reconstructPayload(rawBody);
+    const payload = reconstructPayload(rawBody);
+    const {
+      playerInput,
+      sender,
+      history,
+      partySheets,
+      actorSheet,
+      campaignId,
+      reactiveState,
+      mode,
+      buddyKind,
+      rollOutcome,
+      arbiterMemory,
+      clashActive,
+      hasPendingChecks,
+      spotlight,
+    } = payload;
 
+    const scene = classifySceneKind({
+      mode,
+      playerInput,
+      clashActive,
+      hasPendingChecks,
+    });
+
+    const campaignBlock = focusedCampaignBlock(campaignId, reactiveState);
+    // Keep full bible available lightly for play mode continuity
     const campaign = getCampaign(campaignId);
-    const campaignBlock = campaign
-      ? formatCampaignBible(campaign)
-      : 'No campaign selected — run a flexible dark-fantasy table that still tracks consequences.';
+    const fullBibleHint =
+      mode === 'play' && campaign
+        ? `\n[SESSION HOOK] ${campaign.sessionOneSetPiece}`
+        : '';
 
     const liveStateBlock = reactiveState
       ? formatStateForGm(reactiveState)
       : 'No reactive state yet. Invent lightly, then emit a STATE patch to seed flags/heat/clocks.';
 
-    const systemInstruction = `[IDENTITY]
-You are the Void Arbiter — a world-class Dungeon Master for a private table of three: Aden, Edward, and Jamie. You run vivid, mechanically coherent D&D 5e-style play with sharp sensory detail, living NPCs, and consequential stakes. Humor and adult/chaotic energy are welcome when the table pushes there — never lecture, never moralize, never break character into chatbot voice.
+    const memoryBlock = formatMemoryForGm(arbiterMemory);
+    const craft = buildDirectorCraft(scene);
+    const buddyHint =
+      mode === 'buddy' && buddyKind ? `\n[BUDDY INTENT] ${buddyKindPrompt(buddyKind)}` : '';
+    const rollBlock =
+      mode === 'resolve' && rollOutcome
+        ? `\n[RESOLVED ROLL — SACRED]\n${formatRollOutcomeForGm(rollOutcome)}`
+        : '';
+    const spotlightLine = spotlight
+      ? `\n[TABLE SPOTLIGHT] Center ${spotlight} this beat unless fiction clearly cuts away.`
+      : '';
+
+    const maxTokens = mode === 'buddy' ? 650 : mode === 'resolve' ? 900 : 1100;
+    const temperature = mode === 'buddy' ? 0.85 : 0.78;
+
+    const systemInstruction = `${craft}
+${buddyHint}
 
 [HARD LAW — SHEETS ARE SACRED]
 - Character sheets below are FACT. Never rewrite stats, class, HP max, skills, or inventory.
 - If fiction conflicts with a sheet, the sheet wins.
 - Do not invent new class features that contradict the sheet; you may narrate existing features vividly.
+- Never invent d20 results. Dice are sacred.
 
-[CAMPAIGN BIBLE]
-${campaignBlock}
+[CAMPAIGN FOCUS]
+${campaignBlock}${fullBibleHint}
 
-[LIVE WORLD STATE — EVERYTHING MATTERS]
+[LIVE WORLD STATE]
 ${liveStateBlock}
 
 Treat flags, faction heat, clocks, NPC memory, and location state as durable truth.
-When player actions change the world, update those systems. Heat should move when factions are helped/hurt. Clocks advance when time/pressure ticks. NPC memory records what they witnessed. Location state shifts when a place changes.
+When player actions change the world, update those systems.
+
+[TABLE MEMORY — THESE THREE]
+${memoryBlock}
+
+Callback jokes, nicknames, and highlights when it feels natural. Update MEMORY when a new legend lands.
+${rollBlock}${spotlightLine}
 
 [VAULT PROTOCOL]
 ${GM_VAULT_PROTOCOL}
+
+[MEMORY PROTOCOL]
+${MEMORY_PROTOCOL}
 
 [ACTIVE ACTOR SHEET]
 ${actorSheet}
@@ -195,17 +369,8 @@ ${actorSheet}
 [PARTY ROSTER]
 ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n') : 'Roster incoming from table state.'}
 
-[CRAFT]
-1. Stay inside this campaign's tone and voice bible.
-2. Describe the environment with concrete detail (light, smell, sound, tactical geometry).
-3. Resolve actions with 5e-flavored rulings: name the check/save, suggest a DC, ask for d20 + relevant mod when risk matters.
-4. Failures create complications and new angles — not brick walls.
-5. Keep momentum: end by spotlighting one specific player with a clear question or choice — and prefer BEATS when the fork is real.
-6. Target length: usually 120–220 words when a scene deserves it; shorter for quick beats.
-7. Ban corporate filler ("In a world...", "Delve into...", "A wave of emotion..."). Speak like a legendary tabletop storyteller.
-8. Honor campaign GM directives above general improvisation.
-9. When a check matters, emit CHECKS and also say it in fiction. Do not invent the d20 result yourself.
-10. Prefer TITLE when a clock fills or clash begins. Prefer CLASH/HARM when steel is drawn.`;
+[FINAL]
+Speak like the legendary buddy GM they quote later. Aden, Edward, Jamie trust you.`;
 
     const geminiApiKey = getGeminiApiKey();
     if (!geminiApiKey) {
@@ -219,7 +384,7 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
       GEMINI_MODEL
     )}:generateContent`;
 
-    const contents = buildGeminiContents(history, sender, playerInput);
+    const contents = buildGeminiContents(history, sender, playerInput, mode);
 
     let response: Response;
     try {
@@ -235,8 +400,8 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
           },
           contents,
           generationConfig: {
-            temperature: 0.78,
-            maxOutputTokens: 1100,
+            temperature,
+            maxOutputTokens: maxTokens,
           },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -249,7 +414,7 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
     } catch (networkError) {
       console.error('Gemini network failure:', networkError);
       return publicErrorReply(
-        'The reality engine lost signal mid-cast. Drop that unhinged action on me again.'
+        'Lost you for a second — say that again and I am right back with you.'
       );
     }
 
@@ -259,7 +424,7 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
     } catch (parseError) {
       console.error('Gemini JSON parse failure:', parseError);
       return publicErrorReply(
-        'The simulation warped into static. Try that crazy action one more time.'
+        'My brain hiccuped mid-sentence. Hit me with that again.'
       );
     }
 
@@ -269,14 +434,14 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
         statusText: data.error?.status || 'none',
       });
       return publicErrorReply(
-        'The reality engine cracked. Drop that unhinged action on me again.'
+        'The Arbiter stumbled. Drop that on me one more time — I got you.'
       );
     }
 
     if (data.promptFeedback?.blockReason) {
       console.error('Gemini prompt blocked', { reason: data.promptFeedback.blockReason });
       return publicErrorReply(
-        'The void hiccuped on that beat. Rephrase the chaos and fire again.'
+        'Something caught in my throat. Rephrase and I am still here.'
       );
     }
 
@@ -285,7 +450,7 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
       const finishReason = data.candidates?.[0]?.finishReason;
       console.error('Gemini empty candidate', { finishReason: finishReason || 'none' });
       return publicErrorReply(
-        'The simulation warped into static. Try that crazy action one more time.'
+        'Blank page — weird. Try that chaos again; I am listening.'
       );
     }
 
@@ -300,11 +465,17 @@ ${partySheets.length ? partySheets.map((s, i) => `(${i + 1})\n${s}`).join('\n\n'
       titleCard: protocol.titleCard,
       clashStart: protocol.clashStart,
       clashEnd: protocol.clashEnd,
+      memory: protocol.memory,
+      scene,
+      mode,
     });
   } catch (error) {
     console.error('API Pipeline Crash:', error);
     return NextResponse.json(
-      { reply: 'The matrix caught fire. Try that crazy action one more time.', statePatch: null },
+      {
+        reply: 'I glitched. Not leaving the table though — fire that again.',
+        statePatch: null,
+      },
       { status: 500 }
     );
   }

@@ -17,6 +17,8 @@ export default function HostSatchel({
   onInjectSetPiece,
   onStartClash,
   onEndClash,
+  directorNote = '',
+  onDirectorNote,
 }: {
   open: boolean;
   onClose: () => void;
@@ -31,6 +33,8 @@ export default function HostSatchel({
   onInjectSetPiece: () => void;
   onStartClash: () => void;
   onEndClash: () => void;
+  directorNote?: string;
+  onDirectorNote?: (note: string) => void;
 }) {
   if (!open) return null;
 
@@ -59,6 +63,31 @@ export default function HostSatchel({
           />
           Skip Arbiter on next seal (table note only)
         </label>
+
+        {onDirectorNote && (
+          <div>
+            <p className="text-[11px] italic text-[#b8965c] mb-2">Director note</p>
+            <form
+              className="space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const note = (form.elements.namedItem('note') as HTMLInputElement)?.value?.trim();
+                onDirectorNote(note || '');
+              }}
+            >
+              <input
+                name="note"
+                defaultValue={directorNote}
+                placeholder="Pin a note the Arbiter must honor…"
+                className="quill-input w-full text-[14px] px-2 py-1.5"
+              />
+              <button type="submit" className="vault-host-chip py-2 w-full">
+                Pin for the Arbiter
+              </button>
+            </form>
+          </div>
+        )}
 
         <div>
           <p className="text-[11px] italic text-[#b8965c] mb-2">Lantern</p>

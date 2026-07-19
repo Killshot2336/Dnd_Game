@@ -1493,3 +1493,42 @@ body {
   font-style: italic;
   color: #7a5a38;
 }
+
+.arbiter-moments {
+  padding: 0.35rem 0.6rem 0.45rem;
+  border-top: 1px solid rgba(139, 94, 52, 0.35);
+  background: rgba(18, 12, 8, 0.55);
+}
+
+.arbiter-moments-label {
+  font-size: 10px;
+  font-style: italic;
+  color: #b8965c;
+  margin-bottom: 0.25rem;
+}
+
+.arbiter-moments-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}
+
+.arbiter-moment-title {
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 11px;
+  color: #f0e2c4;
+}
+
+.arbiter-moment-who {
+  margin-left: 0.35rem;
+  font-size: 10px;
+  font-style: italic;
+  color: #a89070;
+}
+
+.ink-entry-buddy {
+  color: #6b4c2a !important;
+}

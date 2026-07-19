@@ -1,3 +1,4 @@
+import type { MemoryProtocolPatch } from '@/lib/arbiter-memory';
 import type { ReactiveCampaignState } from '@/lib/campaigns/types';
 import type {
   ClashCombatant,
@@ -17,6 +18,7 @@ export interface GmProtocolResult {
   titleCard: TitleCardPayload | null;
   clashStart: ClashCombatant[] | null;
   clashEnd: boolean;
+  memory: MemoryProtocolPatch | null;
 }
 
 function extractBlock(reply: string, tag: string): { clean: string; body: string | null } {
@@ -105,6 +107,10 @@ export function extractGmProtocol(reply: string): GmProtocolResult {
     }
   }
 
+  const memoryBlock = extractBlock(working, 'MEMORY');
+  working = memoryBlock.clean;
+  const memory = parseJson<MemoryProtocolPatch>(memoryBlock.body);
+
   return {
     cleanReply: working.replace(/\n{3,}/g, '\n\n').trim(),
     statePatch,
@@ -132,6 +138,7 @@ export function extractGmProtocol(reply: string): GmProtocolResult {
         : null,
     clashStart,
     clashEnd,
+    memory,
   };
 }
 
@@ -230,11 +237,16 @@ To end clash: <<<CLASH
 end
 CLASH>>>
 
+<<<MEMORY
+{"jokes":["optional"],"nicknames":{},"highlight":{"title":"","detail":"","who":""},"spine":["bullet"],"tableBond":""}
+MEMORY>>>
+
 Rules for protocol:
 - Offer 2–3 BEATS when the scene forks. Labels under 40 chars. No more than once per reply.
 - Offer CHECKS when the fiction demands a roll — light the dice. One primary check preferred.
 - Use HARM only during clash or clear injury. Amounts should match the fiction.
 - TITLE when a clock fills, a chapter turns, or clash begins — short, cinematic.
 - CLASH when blades are drawn. Include named foes with hp. End clash when the fight resolves.
+- MEMORY when something memorable lands — jokes, nicknames, highlights, session spine.
 - Keep STATE patches small and true.
 `.trim();

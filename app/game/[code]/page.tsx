@@ -16,6 +16,20 @@ import HostSatchel from '@/components/vault/HostSatchel';
 import LevelUpRitual from '@/components/vault/LevelUpRitual';
 import PendingChecks from '@/components/vault/PendingChecks';
 import TitleCard from '@/components/vault/TitleCard';
+import MomentsStrip from '@/components/vault/MomentsStrip';
+import type { RollOutcomePayload } from '@/lib/arbiter-director';
+import {
+  buildColdOpen,
+  mergeMemoryPatch,
+  readArbiterMemory,
+  shouldOfferColdOpen,
+  writeArbiterMemory,
+} from '@/lib/arbiter-memory';
+import {
+  formatBuddyTableMessage,
+  parseBuddyCommand,
+  parseBuddyTableMessage,
+} from '@/lib/buddy-gm';
 import {
   applyReactivePatch,
   buildInitialStateData,
@@ -59,6 +73,7 @@ import {
   formatRollMessage,
   formatSpotlightMessage,
   formatWhisperMessage,
+  gradeRollOutcome,
   isRollCommand,
   parseRollExpression,
   parseRollMessage,
@@ -187,6 +202,7 @@ function GameRoom({ params }: { params: { code: string } }) {
   const vaultPersistTimerRef = useRef<number | null>(null);
   const reactivePrevRef = useRef<ReactiveCampaignState | null>(null);
   const openingLockRef = useRef(false);
+  const coldOpenLockRef = useRef(false);
 
   useEffect(() => {
     currentPlayerNameRef.current = currentPlayer?.user_name ?? null;
@@ -667,10 +683,22 @@ function GameRoom({ params }: { params: { code: string } }) {
     const run = async () => {
       try {
         const supabase = getSupabaseBrowserClient();
-        const nextData = writeTableMeta(game.state_data, { openingPosted: true });
-        await supabase.from('messages').insert([
-          { game_id: game.id, sender: 'GM', content: opening },
-        ]);
+        let nextData = writeTableMeta(game.state_data, { openingPosted: true });
+        const memory = readArbiterMemory(game.state_data);
+        const cold =
+          shouldOfferColdOpen(memory) && campaign
+            ? buildColdOpen(memory, campaign.title)
+            : null;
+        if (cold) {
+          nextData = writeArbiterMemory(nextData, {
+            lastColdOpenAt: new Date().toISOString(),
+          });
+        }
+        const inserts = [{ game_id: game.id, sender: 'GM', content: opening }];
+        if (cold) {
+          inserts.push({ game_id: game.id, sender: 'GM', content: cold });
+        }
+        await supabase.from('messages').insert(inserts);
         await supabase
           .from('games')
           .update({ state_data: nextData })
@@ -1036,6 +1064,44 @@ function GameRoom({ params }: { params: { code: string } }) {
     [game?.id]
   );
 
+  // Cold open when returning to a remembered table (opening already posted)
+  useEffect(() => {
+    if (!game?.id || !currentPlayer || coldOpenLockRef.current) return;
+    const meta = readTableMeta(game.state_data);
+    if (!meta.openingPosted) return;
+    if (messages.length < 1) return;
+    const memory = readArbiterMemory(game.state_data);
+    if (!shouldOfferColdOpen(memory)) {
+      coldOpenLockRef.current = true;
+      return;
+    }
+    const campaign = getCampaign(
+      typeof game.state_data?.campaignId === 'string'
+        ? (game.state_data.campaignId as string)
+        : readReactiveState(game.state_data)?.campaignId
+    );
+    if (!campaign) return;
+    const cold = buildColdOpen(memory, campaign.title);
+    if (!cold) return;
+
+    coldOpenLockRef.current = true;
+    const run = async () => {
+      try {
+        const nextData = writeArbiterMemory(game.state_data, {
+          lastColdOpenAt: new Date().toISOString(),
+        });
+        setGame((prev) => (prev ? { ...prev, state_data: nextData } : prev));
+        const supabase = getSupabaseBrowserClient();
+        await supabase.from('games').update({ state_data: nextData }).eq('id', game.id);
+        await postTableMessage('GM', cold);
+      } catch (error) {
+        console.error('Cold open failed:', error);
+        coldOpenLockRef.current = false;
+      }
+    };
+    void run();
+  }, [game, currentPlayer, messages.length, postTableMessage]);
+
   const handleTokenDrag = useCallback(
     (name: string, pos: TokenTablePos) => {
       const meta = readTableMeta(game?.state_data);
@@ -1049,100 +1115,65 @@ function GameRoom({ params }: { params: { code: string } }) {
     [game?.state_data, persistTablePatch]
   );
 
-  const handleExecuteAction = async () => {
-    if (!inputMessage.trim() || !currentPlayer?.user_name || !game?.id || isGMLoading) {
-      return;
-    }
+  const runArbiterTurn = useCallback(
+    async (opts: {
+      mode: 'play' | 'buddy' | 'resolve';
+      playerInput: string;
+      senderName: string;
+      activeGameId: string;
+      buddyKind?: 'ask' | 'help' | 'banter' | 'remember';
+      rollOutcome?: RollOutcomePayload;
+      playerMessageContent?: string;
+      skipPlayerMessage?: boolean;
+    }) => {
+      if (!game) return;
+      const {
+        mode,
+        playerInput,
+        senderName,
+        activeGameId,
+        buddyKind,
+        rollOutcome,
+        playerMessageContent,
+        skipPlayerMessage,
+      } = opts;
 
-    const userText = inputMessage.trim();
-    const senderName = currentPlayer.user_name;
-    const activeGameId = game.id;
+      const displayPlayer = playerMessageContent ?? playerInput;
+      let optimisticPlayerMsg = null as ReturnType<typeof createOptimisticMessage> | null;
 
-    // --- Table commands (no GM API) ---
-    if (isRollCommand(userText)) {
-      const parsed = parseRollExpression(userText);
-      if (!parsed) {
-        setSyncNotice('Dice expression unclear — try /roll 1d20+5');
-        return;
-      }
-      setInputMessage('');
-      const result = resolveRoll(parsed);
-      const content = formatRollMessage(senderName, result);
-      setDiceBadge({ sender: senderName, result });
-      playDiceClack();
-      triggerDiceFromUser(senderName);
-      window.setTimeout(() => setDiceBadge(null), 4200);
-      setLastSpeaker(senderName);
-      await postTableMessage(senderName, content);
-      return;
-    }
-
-    const whisper = parseWhisper(userText);
-    if (whisper) {
-      setInputMessage('');
-      const content = formatWhisperMessage(senderName, whisper.target, whisper.body);
-      playWhisperRustle();
-      await postTableMessage(senderName, content);
-      return;
-    }
-
-    const spotlightTarget = parseSpotlightCommand(userText);
-    if (spotlightTarget !== undefined) {
-      setInputMessage('');
-      persistTablePatch({ spotlight: spotlightTarget });
-      playWaxStamp();
-      await postTableMessage('GM', formatSpotlightMessage(spotlightTarget));
-      return;
-    }
-
-    // --- Normal action → GM ---
-    setInputMessage('');
-    const vaultBefore = readVaultRoom(game.state_data);
-    if (vaultBefore.hostSkipArbiter) {
-      setLastSpeaker(senderName);
-      await postTableMessage(senderName, userText);
-      persistVaultPatch({ hostSkipArbiter: false, pendingBeats: [] });
-      void postTableMessage(
-        'Chronicle',
-        'Host sealed the ink without the Arbiter — the table holds the deed.'
-      );
-      return;
-    }
-
-    setIsGMLoading(true);
-    triggerDiceFromUser(senderName);
-    setLastSpeaker(senderName);
-
-    const optimisticPlayerMsg = createOptimisticMessage(activeGameId, senderName, userText);
-    setMessages((prev) => mergeMessageLedger(prev, optimisticPlayerMsg));
-
-    try {
-      const supabase = getSupabaseBrowserClient();
-
-      try {
-        const { error: playerMsgError } = await supabase.from('messages').insert([
-          {
-            game_id: activeGameId,
-            sender: senderName,
-            content: userText,
-          },
-        ]);
-        if (playerMsgError) {
-          throw playerMsgError;
+      if (!skipPlayerMessage) {
+        optimisticPlayerMsg = createOptimisticMessage(
+          activeGameId,
+          senderName,
+          displayPlayer
+        );
+        setMessages((prev) => mergeMessageLedger(prev, optimisticPlayerMsg!));
+        try {
+          const supabase = getSupabaseBrowserClient();
+          const { error: playerMsgError } = await supabase.from('messages').insert([
+            {
+              game_id: activeGameId,
+              sender: senderName,
+              content: displayPlayer,
+            },
+          ]);
+          if (playerMsgError) throw playerMsgError;
+        } catch (writeError) {
+          console.error('Player message persist failure:', writeError);
+          setSyncNotice('Action kept locally — DB write delayed.');
         }
-      } catch (writeError) {
-        console.error('Player message persist failure:', writeError);
-        setSyncNotice('Action kept locally — DB write delayed.');
       }
 
-      const activeHistory = messages
-        .concat(optimisticPlayerMsg)
+      const historySource = optimisticPlayerMsg
+        ? messages.concat(optimisticPlayerMsg)
+        : messages;
+      const activeHistory = historySource
         .map((message) => ({
           sender: message?.sender ?? 'Unknown',
           content: message?.content ?? '',
         }))
         .filter((message) => message.content.length > 0)
-        .slice(-14);
+        .slice(mode === 'buddy' ? -8 : -14);
 
       const partySheets = players.map((player) => {
         const snap = player.sheet_snapshot;
@@ -1159,25 +1190,27 @@ function GameRoom({ params }: { params: { code: string } }) {
       });
 
       const tableMeta = readTableMeta(game.state_data);
-      const spotlightNote = tableMeta.spotlight
-        ? `\n[TABLE SPOTLIGHT: ${tableMeta.spotlight} should be centered this beat unless the fiction clearly cuts away.]`
-        : '';
+      const vaultLive = readVaultRoom(game.state_data);
+      const reactive = readReactiveState(game.state_data);
+      const campaignId =
+        (typeof game.state_data?.campaignId === 'string'
+          ? game.state_data.campaignId
+          : reactive?.campaignId) ?? null;
+      const arbiterMemory = readArbiterMemory(game.state_data);
 
-      let gmReply = 'The simulation warped. Repeat your raw action.';
+      let gmReply =
+        mode === 'buddy'
+          ? 'Still here — say that again?'
+          : 'The simulation warped. Repeat your raw action.';
       let statePatch: Partial<ReactiveCampaignState> | null = null;
       let protocol = extractGmProtocol('');
-      try {
-        const reactive = readReactiveState(game.state_data);
-        const campaignId =
-          (typeof game.state_data?.campaignId === 'string'
-            ? game.state_data.campaignId
-            : reactive?.campaignId) ?? null;
 
+      try {
         const res = await fetch('/api/gm-stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            playerInput: userText + spotlightNote,
+            playerInput,
             sender: senderName,
             gameId: activeGameId,
             history: activeHistory,
@@ -1185,6 +1218,13 @@ function GameRoom({ params }: { params: { code: string } }) {
             actorSheet: compactSheetForGm(activeSheet),
             campaignId,
             reactiveState: reactive,
+            mode,
+            buddyKind,
+            rollOutcome,
+            arbiterMemory,
+            clashActive: vaultLive.clash.active,
+            hasPendingChecks: vaultLive.pendingChecks.length > 0,
+            spotlight: tableMeta.spotlight,
           }),
         });
 
@@ -1198,47 +1238,67 @@ function GameRoom({ params }: { params: { code: string } }) {
           titleCard?: { title: string; subtitle: string; kind?: string } | null;
           clashStart?: unknown;
           clashEnd?: boolean;
+          memory?: Parameters<typeof mergeMemoryPatch>[1];
         };
+
         if (typeof data?.reply === 'string' && data.reply.trim()) {
           protocol = extractGmProtocol(data.reply.trim());
-          // Prefer server-parsed fields when present; fall back to client strip
-          gmReply = protocol.cleanReply;
-          statePatch = data.statePatch ?? protocol.statePatch;
-          protocol = {
-            ...protocol,
-            cleanReply: gmReply,
-            statePatch,
-            beats: data.beats ?? protocol.beats,
-            checks: data.checks ?? protocol.checks,
-            harm: data.harm ?? protocol.harm,
-            loot: data.loot ?? protocol.loot,
-            titleCard: data.titleCard
-              ? {
-                  title: data.titleCard.title,
-                  subtitle: data.titleCard.subtitle ?? '',
-                  kind:
-                    data.titleCard.kind === 'clock' ||
-                    data.titleCard.kind === 'clash' ||
-                    data.titleCard.kind === 'loot' ||
-                    data.titleCard.kind === 'chapter'
-                      ? data.titleCard.kind
-                      : 'chapter',
-                }
-              : protocol.titleCard,
-            clashEnd: data.clashEnd ?? protocol.clashEnd,
-            clashStart: (data.clashStart as typeof protocol.clashStart) ?? protocol.clashStart,
-          };
+          gmReply = protocol.cleanReply || data.reply.trim();
+          // If server already stripped protocol, cleanReply may equal reply
+          if (data.statePatch) statePatch = data.statePatch;
+          else statePatch = protocol.statePatch;
+
+          // Prefer server-parsed protocol fields when present
+          if (!protocol.beats && data.beats) protocol = { ...protocol, beats: data.beats };
+          if (!protocol.checks && data.checks)
+            protocol = { ...protocol, checks: data.checks };
+          if (!protocol.harm && data.harm) protocol = { ...protocol, harm: data.harm };
+          if (!protocol.loot && data.loot) protocol = { ...protocol, loot: data.loot };
+          if (!protocol.titleCard && data.titleCard) {
+            protocol = {
+              ...protocol,
+              titleCard: {
+                title: data.titleCard.title,
+                subtitle: data.titleCard.subtitle ?? '',
+                kind:
+                  data.titleCard.kind === 'clock' ||
+                  data.titleCard.kind === 'clash' ||
+                  data.titleCard.kind === 'loot' ||
+                  data.titleCard.kind === 'chapter'
+                    ? data.titleCard.kind
+                    : 'chapter',
+              },
+            };
+          }
+          if (data.clashEnd) protocol = { ...protocol, clashEnd: true };
+          if (data.clashStart)
+            protocol = {
+              ...protocol,
+              clashStart: data.clashStart as typeof protocol.clashStart,
+            };
+          if (data.memory) protocol = { ...protocol, memory: data.memory };
+          if (data.beats) protocol = { ...protocol, beats: data.beats };
+          if (data.checks) protocol = { ...protocol, checks: data.checks };
+          if (data.harm) protocol = { ...protocol, harm: data.harm };
+          if (data.loot) protocol = { ...protocol, loot: data.loot };
+          if (data.statePatch) protocol = { ...protocol, statePatch: data.statePatch };
         }
       } catch (apiError) {
         console.error('GM API transport failure:', apiError);
-        gmReply = 'The matrix caught fire mid-turn. Spit that chaos at me again.';
+        gmReply =
+          mode === 'buddy'
+            ? 'Glitched for a sec — I am still at the table. Ask me again.'
+            : 'The matrix caught fire mid-turn. Spit that chaos at me again.';
       }
 
       const optimisticGmMsg = createOptimisticMessage(activeGameId, 'GM', gmReply);
       setMessages((prev) => mergeMessageLedger(prev, optimisticGmMsg));
 
       let nextStateData = (game.state_data ?? {}) as Record<string, unknown>;
-      if (statePatch) {
+      if (statePatch && mode !== 'buddy') {
+        nextStateData = applyReactivePatch(nextStateData, statePatch);
+      } else if (statePatch && mode === 'buddy') {
+        // Buddy may still touch light memory STATE — allow small patches
         nextStateData = applyReactivePatch(nextStateData, statePatch);
       }
 
@@ -1250,9 +1310,15 @@ function GameRoom({ params }: { params: { code: string } }) {
         );
       }
       nextStateData = writeVaultRoom(nextStateData, vaultMerged);
+
+      const memoryNext = mergeMemoryPatch(
+        readArbiterMemory(nextStateData),
+        protocol.memory
+      );
+      nextStateData = writeArbiterMemory(nextStateData, memoryNext);
+
       if (protocol.titleCard) setLocalTitleDismissed(null);
 
-      // Sync player HP into clash roster when clash starts
       if (protocol.clashStart && protocol.clashStart.length > 0) {
         let clash = vaultMerged.clash;
         for (const player of players) {
@@ -1277,7 +1343,7 @@ function GameRoom({ params }: { params: { code: string } }) {
         nextStateData = writeVaultRoom(nextStateData, { clash });
       }
 
-      // Apply harm to player HP rows when named
+      const supabase = getSupabaseBrowserClient();
       if (protocol.harm && protocol.harm.length > 0) {
         for (const h of protocol.harm) {
           const target = players.find(
@@ -1319,9 +1385,7 @@ function GameRoom({ params }: { params: { code: string } }) {
             content: gmReply,
           },
         ]);
-        if (gmMsgError) {
-          throw gmMsgError;
-        }
+        if (gmMsgError) throw gmMsgError;
       } catch (gmWriteError) {
         console.error('GM message persist failure:', gmWriteError);
         setSyncNotice('GM reply held locally — persistence retry on heartbeat.');
@@ -1338,6 +1402,150 @@ function GameRoom({ params }: { params: { code: string } }) {
       } catch (narrativeError) {
         console.error('Narrative persist failure:', narrativeError);
       }
+    },
+    [
+      activeSheet,
+      game,
+      messages,
+      players,
+      postTableMessage,
+    ]
+  );
+
+  const handleExecuteAction = async () => {
+    if (!inputMessage.trim() || !currentPlayer?.user_name || !game?.id || isGMLoading) {
+      return;
+    }
+
+    const userText = inputMessage.trim();
+    const senderName = currentPlayer.user_name;
+    const activeGameId = game.id;
+
+    // --- Table commands (no GM API) ---
+    if (isRollCommand(userText)) {
+      const parsed = parseRollExpression(userText);
+      if (!parsed) {
+        setSyncNotice('Dice expression unclear — try /roll 1d20+5');
+        return;
+      }
+      setInputMessage('');
+      const result = resolveRoll(parsed);
+      const content = formatRollMessage(senderName, result);
+      setDiceBadge({ sender: senderName, result });
+      playDiceClack();
+      triggerDiceFromUser(senderName);
+      window.setTimeout(() => setDiceBadge(null), 4200);
+      setLastSpeaker(senderName);
+      await postTableMessage(senderName, content);
+
+      // Honest dice: if there's a DC (or pending check), Arbiter narrates the outcome
+      const vaultNow = readVaultRoom(game.state_data);
+      const pending = vaultNow.pendingChecks[0];
+      const dc = result.dc ?? pending?.dc;
+      const label = result.label ?? pending?.label;
+      const ability = result.ability ?? pending?.ability;
+      const graded = gradeRollOutcome(result, dc);
+
+      if (dc != null || graded.outcome === 'crit_success' || graded.outcome === 'crit_fail') {
+        if (pending) {
+          persistVaultPatch({
+            pendingChecks: vaultNow.pendingChecks.filter((c) => c.id !== pending.id),
+          });
+        }
+        const rollOutcome: RollOutcomePayload = {
+          roller: senderName,
+          expression: result.expression,
+          total: result.total,
+          detail: result.detail,
+          dc,
+          label,
+          ability,
+          outcome: graded.outcome,
+          margin: graded.margin,
+        };
+        setIsGMLoading(true);
+        try {
+          await runArbiterTurn({
+            mode: 'resolve',
+            playerInput: `${senderName} rolled ${result.expression} → ${result.total}${
+              label ? ` for ${label}` : ''
+            }${dc != null ? ` vs DC ${dc}` : ''}. Outcome: ${graded.outcome}.`,
+            senderName,
+            activeGameId,
+            rollOutcome,
+            skipPlayerMessage: true,
+          });
+        } finally {
+          setIsGMLoading(false);
+        }
+      }
+      return;
+    }
+
+    const buddy = parseBuddyCommand(userText);
+    if (buddy) {
+      setInputMessage('');
+      setLastSpeaker(senderName);
+      playWhisperRustle();
+      const tableLine = formatBuddyTableMessage(senderName, buddy.body);
+      setIsGMLoading(true);
+      try {
+        await runArbiterTurn({
+          mode: 'buddy',
+          buddyKind: buddy.kind,
+          playerInput: buddy.body,
+          senderName,
+          activeGameId,
+          playerMessageContent: tableLine,
+        });
+      } finally {
+        setIsGMLoading(false);
+      }
+      return;
+    }
+
+    const whisper = parseWhisper(userText);
+    if (whisper) {
+      setInputMessage('');
+      const content = formatWhisperMessage(senderName, whisper.target, whisper.body);
+      playWhisperRustle();
+      await postTableMessage(senderName, content);
+      return;
+    }
+
+    const spotlightTarget = parseSpotlightCommand(userText);
+    if (spotlightTarget !== undefined) {
+      setInputMessage('');
+      persistTablePatch({ spotlight: spotlightTarget });
+      playWaxStamp();
+      await postTableMessage('GM', formatSpotlightMessage(spotlightTarget));
+      return;
+    }
+
+    // --- Normal action → GM ---
+    setInputMessage('');
+    const vaultBefore = readVaultRoom(game.state_data);
+    if (vaultBefore.hostSkipArbiter) {
+      setLastSpeaker(senderName);
+      await postTableMessage(senderName, userText);
+      persistVaultPatch({ hostSkipArbiter: false, pendingBeats: [] });
+      void postTableMessage(
+        'Chronicle',
+        'Host sealed the ink without the Arbiter — the table holds the deed.'
+      );
+      return;
+    }
+
+    setIsGMLoading(true);
+    triggerDiceFromUser(senderName);
+    setLastSpeaker(senderName);
+    try {
+      await runArbiterTurn({
+        mode: 'play',
+        playerInput: userText,
+        senderName,
+        activeGameId,
+      });
     } finally {
       setIsGMLoading(false);
     }
@@ -1642,6 +1850,7 @@ function GameRoom({ params }: { params: { code: string } }) {
   const mapArt = campaign?.mapArt ?? campaign?.coverArt ?? BOARD_TEXTURE;
   const tableMeta = readTableMeta(game?.state_data);
   const vaultRoom = readVaultRoom(game?.state_data);
+  const arbiterMemory = readArbiterMemory(game?.state_data);
   const dressClass = campaign ? `campaign-dress-${campaign.id}` : '';
   const sortedPlayers = [...players].sort((a, b) =>
     String(a.created_at).localeCompare(String(b.created_at))
@@ -1724,6 +1933,12 @@ function GameRoom({ params }: { params: { code: string } }) {
           onInjectSetPiece={handleInjectSetPiece}
           onStartClash={handleStartClash}
           onEndClash={handleEndClash}
+          directorNote={readArbiterMemory(game?.state_data).directorNote}
+          onDirectorNote={(note) => {
+            const next = writeArbiterMemory(game?.state_data, { directorNote: note });
+            persistStateData(next);
+            playWaxStamp();
+          }}
         />
       )}
 
@@ -1859,6 +2074,7 @@ function GameRoom({ params }: { params: { code: string } }) {
             state={reactive}
             campaignTitle={campaign?.title ?? null}
           />
+          <MomentsStrip highlights={arbiterMemory.highlights} />
         </section>
 
         {/* BOOK PAGE resting on the near edge */}
@@ -1946,22 +2162,31 @@ function GameRoom({ params }: { params: { code: string } }) {
               const isChronicle = message?.sender === 'Chronicle';
               const whisper = parseWhisperMessage(message?.content ?? '');
               const roll = parseRollMessage(message?.content ?? '');
+              const buddyMsg = parseBuddyTableMessage(message?.content ?? '');
               return (
                 <div key={`${message.id}-${message.created_at}`} className="ink-line">
                   <p
                     className={`ink-entry-name ${
                       isGm || isChronicle ? 'ink-entry-gm' : ''
-                    } ${whisper ? 'text-[#1e3a5f]' : ''} ${roll ? 'text-[#8b4510]' : ''}`}
+                    } ${whisper ? 'text-[#1e3a5f]' : ''} ${roll ? 'text-[#8b4510]' : ''} ${
+                      buddyMsg ? 'ink-entry-buddy' : ''
+                    }`}
                   >
                     {whisper
                       ? `Passed note — ${whisper.from} to ${whisper.to}`
-                      : roll
-                        ? message?.content?.replace(/^🎲\s*/, '') ?? ''
-                        : message?.sender ?? 'Unknown'}
+                      : buddyMsg
+                        ? `To the Arbiter — ${buddyMsg.from}`
+                        : roll
+                          ? message?.content?.replace(/^🎲\s*/, '') ?? ''
+                          : message?.sender ?? 'Unknown'}
                   </p>
                   {!roll && (
                     <p className="ink-entry-body whitespace-pre-wrap">
-                      {whisper ? whisper.body : message?.content ?? ''}
+                      {whisper
+                        ? whisper.body
+                        : buddyMsg
+                          ? buddyMsg.body
+                          : message?.content ?? ''}
                     </p>
                   )}
                 </div>
@@ -2000,13 +2225,13 @@ function GameRoom({ params }: { params: { code: string } }) {
                 }
               }}
               rows={2}
-              placeholder="Write your deed… or cast a die from the tray"
+              placeholder="Deed, /roll, or /gm ask your buddy…"
               className="quill-input w-full text-[16px] px-1 py-2"
               disabled={isGMLoading}
             />
             <div className="flex items-center justify-between gap-3">
               <p className="text-[12px] italic text-[#5c3a21]">
-                Enter seals the ink · drag the miniatures
+                /gm for side help · Enter seals the ink
               </p>
               <button
                 type="submit"
