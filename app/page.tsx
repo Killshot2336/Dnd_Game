@@ -55,7 +55,7 @@ export default function HomeDashboard() {
 
   return (
     <GameStage className="tabletop-shell" ambient>
-      <div className="relative flex flex-col items-center justify-center min-h-screen p-4 v3-chamber">
+      <div className="relative flex flex-col items-center justify-center h-[var(--app-height)] min-h-[var(--app-height)] p-4 v3-chamber overflow-y-auto">
         <div className="v3-chamber-wall" aria-hidden />
         <div className="v3-sconce v3-sconce-left" aria-hidden />
         <div className="v3-sconce v3-sconce-right" aria-hidden />

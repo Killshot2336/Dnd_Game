@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&display=swap');
 @import './v3-table.css';
+@import './responsive.css';
 
 @tailwind base;
 @tailwind components;
@@ -625,14 +626,14 @@ body {
   filter: invert(0.7) sepia(0.35) saturate(0.45);
 }
 
-/* 2.5D table */
+/* 2.5D table — base; fluid tilt/scale in responsive.css */
 .fp-table-stage {
-  perspective: 920px;
+  perspective: var(--table-perspective, 920px);
   perspective-origin: 50% 72%;
 }
 
 .fp-table-plane {
-  transform: rotateX(54deg) scale(1.16);
+  transform: rotateX(var(--table-tilt, 54deg)) scale(var(--table-scale, 1.16));
   transform-origin: 50% 100%;
   transform-style: preserve-3d;
   will-change: transform;
@@ -686,18 +687,8 @@ body {
 }
 
 .room-split {
+  /* Layout owned by responsive.css */
   display: grid;
-  grid-template-rows: minmax(0, 1.25fr) minmax(0, 0.85fr);
-  gap: 0;
-  height: 100vh;
-  max-height: 100vh;
-  padding: 0.75rem 0.75rem 0.5rem;
-}
-
-@media (min-width: 640px) {
-  .room-split {
-    padding: 1rem 1.25rem 0.75rem;
-  }
 }
 
 /* —— Official-feel D&D character sheet —— */

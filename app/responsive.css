@@ -1,0 +1,342 @@
+/* ============================================================
+   Voidline — seamless sizing across devices
+   ============================================================ */
+
+:root {
+  --app-height: 100dvh;
+  --app-width: 100vw;
+  --vv-offset-top: 0px;
+  --app-pad-top: env(safe-area-inset-top, 0px);
+  --app-pad-bottom: env(safe-area-inset-bottom, 0px);
+  --app-pad-left: env(safe-area-inset-left, 0px);
+  --app-pad-right: env(safe-area-inset-right, 0px);
+  --table-flex: 1.1fr;
+  --book-flex: 1fr;
+  --table-tilt: 58deg;
+  --table-scale: 1.22;
+  --table-perspective: 1100px;
+  --ink-size: clamp(15px, 2.6vw, 17px);
+  --touch-min: 44px;
+}
+
+@supports not (height: 100dvh) {
+  :root {
+    --app-height: 100vh;
+  }
+}
+
+html,
+body {
+  min-height: var(--app-height);
+  height: var(--app-height);
+  overflow: hidden;
+}
+
+/* Full-bleed shells use the live viewport */
+.aaa-root,
+.aaa-stage,
+.v3-chamber,
+.min-h-screen.v3-chamber,
+.min-h-screen.tabletop-shell {
+  min-height: var(--app-height) !important;
+  height: var(--app-height);
+  max-height: var(--app-height);
+}
+
+.v3-chamber {
+  min-height: var(--app-height) !important;
+  padding-top: var(--app-pad-top);
+  padding-bottom: var(--app-pad-bottom);
+  padding-left: var(--app-pad-left);
+  padding-right: var(--app-pad-right);
+  box-sizing: border-box;
+}
+
+/* Letterbox eats precious phone height — hide on small / short */
+@media (max-width: 768px), (max-height: 720px) {
+  .aaa-letterbox-top,
+  .aaa-letterbox-bottom {
+    display: none !important;
+  }
+}
+
+/* ——— Room split: fluid modes ——— */
+.room-split {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-areas:
+    'table'
+    'book';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(140px, var(--table-flex)) minmax(200px, var(--book-flex));
+  gap: 0;
+  height: calc(var(--app-height) - var(--app-pad-top) - var(--app-pad-bottom));
+  max-height: calc(var(--app-height) - var(--app-pad-top) - var(--app-pad-bottom));
+  width: 100%;
+  padding: 0.35rem 0.35rem 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.room-split > .board-frame,
+.room-split > .fp-table-stage,
+.room-split > section.board-frame {
+  grid-area: table;
+  min-height: 0;
+}
+
+.room-split > .chronicle-book,
+.room-split > section.chronicle-book {
+  grid-area: book;
+  min-height: 0;
+}
+
+/* Phone portrait: book-forward for play */
+@media (max-width: 639px) {
+  :root {
+    --table-flex: 0.72fr;
+    --book-flex: 1.28fr;
+    --table-tilt: 48deg;
+    --table-scale: 1.12;
+    --table-perspective: 900px;
+  }
+
+  .room-split {
+    padding: 0.25rem 0.25rem 0;
+  }
+
+  .chronicle-book {
+    margin-top: -1.1rem !important;
+  }
+
+  .fp-gm-seat {
+    width: min(78%, 14rem) !important;
+  }
+}
+
+@media (min-width: 640px) {
+  :root {
+    --table-flex: 1.2fr;
+    --book-flex: 0.9fr;
+  }
+
+  .room-split {
+    padding: 0.5rem 0.75rem 0;
+  }
+}
+
+@media (min-width: 900px) {
+  :root {
+    --table-flex: 1.35fr;
+    --book-flex: 0.8fr;
+    --table-tilt: 58deg;
+    --table-scale: 1.22;
+    --table-perspective: 1100px;
+  }
+
+  .room-split {
+    padding: 0.65rem 1rem 0;
+  }
+}
+
+/* Short viewports: flatten the table so it doesn't clip */
+html.vv-short {
+  --table-tilt: 42deg;
+  --table-scale: 1.08;
+  --table-perspective: 820px;
+  --table-flex: 0.85fr;
+  --book-flex: 1.15fr;
+}
+
+html.vv-tiny {
+  --table-tilt: 34deg;
+  --table-scale: 1.04;
+  --table-perspective: 700px;
+  --table-flex: 0.65fr;
+  --book-flex: 1.35fr;
+}
+
+/* Landscape phones / short landscape: side-by-side */
+@media (orientation: landscape) and (max-height: 520px) {
+  :root {
+    --table-tilt: 36deg;
+    --table-scale: 1.06;
+    --table-perspective: 760px;
+  }
+
+  .room-split {
+    grid-template-areas: 'table book';
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    padding: 0.25rem 0.35rem;
+  }
+
+  .chronicle-book {
+    margin-top: 0 !important;
+  }
+
+  .v3-sconce-far {
+    display: none;
+  }
+}
+
+html.vv-landscape.vv-narrow .room-split {
+  grid-template-areas: 'table book';
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* Apply fluid table transform */
+.fp-table-stage {
+  perspective: var(--table-perspective) !important;
+}
+
+.fp-table-plane {
+  transform: rotateX(var(--table-tilt)) scale(var(--table-scale)) !important;
+}
+
+/* Fluid ink + touch */
+.ink-entry-body {
+  font-size: var(--ink-size) !important;
+  line-height: 1.5;
+}
+
+.bone-die,
+.wax-button,
+.lantern-seat,
+.prop-bell,
+.prop-pouch,
+.prop-ribbon,
+.vault-host-fab,
+.vault-wax-seal {
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+}
+
+.lantern-seat {
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.bone-die {
+  min-width: var(--touch-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Quill well stays usable when the keyboard is up */
+.quill-well {
+  flex-shrink: 0;
+  padding-bottom: max(0.5rem, var(--app-pad-bottom));
+}
+
+html.vv-keyboard .room-split {
+  --table-flex: 0.35fr;
+  --book-flex: 1.65fr;
+}
+
+html.vv-keyboard .board-frame {
+  opacity: 0.55;
+}
+
+html.vv-keyboard .chronicle-book {
+  margin-top: 0 !important;
+}
+
+html.vv-keyboard .quill-input {
+  font-size: 16px !important; /* iOS zoom prevention */
+}
+
+/* Satchel: full bleed phone, capped tablet, never overflow */
+.sheet-leather.v3-satchel,
+aside.sheet-leather {
+  width: 100%;
+  max-width: 100vw;
+  padding-top: var(--app-pad-top);
+  padding-bottom: var(--app-pad-bottom);
+  height: var(--app-height);
+  max-height: var(--app-height);
+}
+
+@media (min-width: 640px) {
+  aside.sheet-leather {
+    width: min(380px, 92vw);
+  }
+}
+
+@media (min-width: 900px) {
+  aside.sheet-leather {
+    width: min(400px, 40vw);
+  }
+}
+
+/* Host folio / title card / clash don't overflow phones */
+.vault-host-panel {
+  max-width: min(20rem, calc(100vw - 1rem)) !important;
+  max-height: min(70vh, calc(var(--app-height) - 4rem)) !important;
+}
+
+.vault-title-card-inner {
+  max-width: min(28rem, calc(100vw - 2rem)) !important;
+  max-height: calc(var(--app-height) - 3rem);
+  overflow: auto;
+}
+
+.vault-clash-hud {
+  width: min(14rem, 48%) !important;
+  max-height: 42%;
+  overflow: auto;
+}
+
+@media (max-width: 639px) {
+  .vault-clash-hud {
+    width: min(11.5rem, 52%) !important;
+    left: 0.35rem !important;
+    bottom: 2.25rem !important;
+    font-size: 10px;
+  }
+
+  .session-plaque {
+    max-width: calc(100vw - 7rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space:nowrap;
+  }
+
+  .v3-sconce-left,
+  .v3-sconce-right {
+    width: 3rem;
+    height: 3rem;
+  }
+}
+
+/* Gate / forge centering uses live height */
+.gate-stage-inner {
+  max-height: calc(var(--app-height) - 2rem);
+  overflow-y: auto;
+}
+
+.dnd-sheet.v3-sacred-sheet {
+  max-height: calc(var(--app-height) - 2rem);
+}
+
+/* Mini tokens scale slightly on narrow screens */
+@media (max-width: 639px) {
+  .mini-token {
+    transform: scale(0.92);
+    transform-origin: center bottom;
+  }
+
+  .mini-token.z-20 {
+    transform: scale(1);
+  }
+}
+
+/* Prevent horizontal scroll from 2.5D overflow */
+.board-frame,
+.fp-table-stage {
+  overflow: hidden;
+  max-width: 100%;
+}

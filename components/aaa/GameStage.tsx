@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { playBootWhoosh, startAmbientBed, stopAmbientBed } from '@/lib/table-sfx';
+import { useAppViewport } from '@/lib/use-app-viewport';
 
 interface GameStageProps {
   children: React.ReactNode;
@@ -19,6 +20,7 @@ interface GameStageProps {
 
 /**
  * AAA presentation shell: letterbox stage, film post, boot curtain, ambient bed.
+ * Syncs --app-height for seamless mobile sizing.
  */
 export default function GameStage({
   children,
@@ -28,6 +30,7 @@ export default function GameStage({
   ambient = true,
   muted = false,
 }: GameStageProps) {
+  useAppViewport();
   const [booting, setBooting] = useState(!skipBoot);
   const [bootGone, setBootGone] = useState(skipBoot);
 
@@ -61,13 +64,13 @@ export default function GameStage({
 
   return (
     <div
-      className={`aaa-root relative min-h-screen overflow-hidden ${className}`}
+      className={`aaa-root relative overflow-hidden ${className}`}
       data-campaign={campaignId ?? undefined}
     >
       <div className="aaa-letterbox-top" aria-hidden />
       <div className="aaa-letterbox-bottom" aria-hidden />
 
-      <div className="aaa-stage relative min-h-screen">
+      <div className="aaa-stage relative h-full min-h-[var(--app-height)]">
         {children}
       </div>
 

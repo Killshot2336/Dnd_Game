@@ -155,7 +155,7 @@ export default function GameRoomPage({ params }: { params: { code: string } }) {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen tabletop-shell flex items-center justify-center loading-ember text-sm">
+        <div className="tabletop-shell flex items-center justify-center loading-ember text-sm h-[var(--app-height)] min-h-[var(--app-height)]">
           Lighting the table…
         </div>
       }
@@ -1830,7 +1830,7 @@ function GameRoom({ params }: { params: { code: string } }) {
 
   if (bootError) {
     return (
-      <div className="min-h-screen tabletop-shell flex items-center justify-center p-6">
+      <div className="tabletop-shell flex items-center justify-center p-6 h-[var(--app-height)] min-h-[var(--app-height)]">
         <div className="parchment-panel max-w-md w-full p-6 space-y-3">
           <h1 className="font-display text-lg font-black tracking-wide text-[#7f1d1d]">
             The Table Rejects This Seal
@@ -1846,7 +1846,7 @@ function GameRoom({ params }: { params: { code: string } }) {
 
   if (!game) {
     return (
-      <div className="min-h-screen tabletop-shell flex items-center justify-center loading-ember text-sm">
+      <div className="tabletop-shell flex items-center justify-center loading-ember text-sm h-[var(--app-height)] min-h-[var(--app-height)]">
         Lighting the table…
       </div>
     );
@@ -1908,7 +1908,7 @@ function GameRoom({ params }: { params: { code: string } }) {
       muted={sfxMuted}
     >
     <div
-      className={`min-h-screen overflow-hidden antialiased select-none relative v3-chamber ${
+      className={`overflow-hidden antialiased select-none relative v3-chamber h-[var(--app-height)] ${
         screenPunch ? 'screen-punch' : ''
       } ${clashBang ? 'v3-clash-bang' : ''}`}
     >
@@ -2232,7 +2232,7 @@ function GameRoom({ params }: { params: { code: string } }) {
           </div>
 
           <form
-            className="quill-well px-4 py-3 space-y-2"
+            className="quill-well px-3 sm:px-4 py-2 sm:py-3 space-y-2 shrink-0"
             onSubmit={(event) => {
               event.preventDefault();
               void handleExecuteAction();
@@ -2262,7 +2262,7 @@ function GameRoom({ params }: { params: { code: string } }) {
               }}
               rows={2}
               placeholder="Deed, /roll, or /gm ask your buddy…"
-              className="quill-input w-full text-[16px] px-1 py-2"
+              className="quill-input w-full text-[16px] px-1 py-2 max-h-[30vh]"
               disabled={isGMLoading}
             />
             <div className="flex items-center justify-between gap-3">
@@ -2288,7 +2288,7 @@ function GameRoom({ params }: { params: { code: string } }) {
 
       {/* Leather satchel / character sheet */}
       <aside
-        className={`fixed inset-y-0 right-0 w-full sm:w-[380px] z-[60] transform transition-transform duration-500 ease-out sheet-leather ${
+        className={`fixed inset-y-0 right-0 z-[60] transform transition-transform duration-500 ease-out sheet-leather v3-satchel ${
           isTrayOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

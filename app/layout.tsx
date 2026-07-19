@@ -1,9 +1,17 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Voidline',
   description: 'Private couch-coop tabletop for Aden, Edward, and Jamie.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#120c08',
 };
 
 export default function RootLayout({
@@ -13,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased overflow-hidden">{children}</body>
     </html>
   );
 }
