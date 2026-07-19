@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "sim": "tsx scripts/sim-table-bots.ts"
+    "sim": "npx --yes tsx scripts/sim-table-bots.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
