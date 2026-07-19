@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import GameStage from '@/components/aaa/GameStage';
 import { CAMPAIGNS, type CampaignId } from '@/lib/campaigns';
+import { ROOM_BG } from '@/lib/game-art';
 import { playWaxStamp } from '@/lib/table-sfx';
 
 type GateMode = 'home' | 'campaigns';
@@ -47,8 +48,7 @@ export default function HomeDashboard() {
         <div
           className="absolute inset-0 bg-cover bg-center parallax-drift opacity-40 plate-ink"
           style={{
-            backgroundImage:
-              'url(https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2400&q=80)',
+            backgroundImage: `url(${ROOM_BG})`,
           }}
         />
         <div className="absolute inset-0 bg-[#120c08]/74" />

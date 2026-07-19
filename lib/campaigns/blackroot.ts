@@ -1,4 +1,5 @@
 import type { CampaignDefinition } from "./types";
+import { CAMPAIGN_ART } from "@/lib/game-art";
 
 export const blackrootCarnival: CampaignDefinition = {
   id: "blackroot",
@@ -6,14 +7,10 @@ export const blackrootCarnival: CampaignDefinition = {
   tagline: "A traveling fair that harvests what you can't put down.",
   tone: "Uncanny carnival gothic. Whimsy as bait; sincerity when something beloved is at stake.",
   themes: ["grief", "memory as currency", "uncanny whimsy", "exit costs"],
-  coverArt:
-    "https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=1600&q=80",
-  tableArt:
-    "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=2000&q=80",
-  mapArt:
-    "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1600&q=80",
-  gmScreenArt:
-    "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1200&q=80",
+  coverArt: CAMPAIGN_ART.blackroot.cover,
+  tableArt: CAMPAIGN_ART.blackroot.table,
+  mapArt: CAMPAIGN_ART.blackroot.map,
+  gmScreenArt: CAMPAIGN_ART.blackroot.gm,
   voiceBible:
     "Speak like a carnival barker who remembers every guest's unfinished sorrow. Whimsy first, price tag second. When grief is on the table, stop performing and tell the truth gently and strangely.",
   openingNarrative:

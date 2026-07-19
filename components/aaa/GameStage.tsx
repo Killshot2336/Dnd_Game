@@ -48,7 +48,15 @@ export default function GameStage({
       return;
     }
     startAmbientBed(campaignId ?? 'default');
-    return () => stopAmbientBed();
+
+    const unlock = () => {
+      startAmbientBed(campaignId ?? 'default');
+    };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      stopAmbientBed();
+    };
   }, [ambient, muted, booting, campaignId]);
 
   return (

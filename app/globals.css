@@ -165,7 +165,8 @@ body {
 }
 
 .plate-ink {
-  filter: sepia(0.42) contrast(1.18) saturate(0.55) brightness(0.72) hue-rotate(-6deg);
+  /* Light grade only — painted plates already carry D&D look */
+  filter: contrast(1.05) saturate(1.05) brightness(0.96);
 }
 
 /* —— Miniatures —— */

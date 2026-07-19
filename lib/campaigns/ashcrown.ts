@@ -1,4 +1,5 @@
 import type { CampaignDefinition } from "./types";
+import { CAMPAIGN_ART } from "@/lib/game-art";
 
 export const ashcrownRegency: CampaignDefinition = {
   id: "ashcrown",
@@ -6,14 +7,10 @@ export const ashcrownRegency: CampaignDefinition = {
   tagline: "A capital where crowns crack and saints keep secrets.",
   tone: "Political intrigue laced with holy horror. Dry wit welcome; never undercut dread when a relic awakens.",
   themes: ["succession", "holy bureaucracy", "faction heat", "relic horror"],
-  coverArt:
-    "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1600&q=80",
-  tableArt:
-    "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2000&q=80",
-  mapArt:
-    "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1600&q=80",
-  gmScreenArt:
-    "https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=1200&q=80",
+  coverArt: CAMPAIGN_ART.ashcrown.cover,
+  tableArt: CAMPAIGN_ART.ashcrown.table,
+  mapArt: CAMPAIGN_ART.ashcrown.map,
+  gmScreenArt: CAMPAIGN_ART.ashcrown.gm,
   voiceBible:
     "Speak like a capital chronicler: precise titles, ash-stained ceremony, miracles filed in triplicate. NPCs bargain in implications. When horror lands, drop the wit and describe the relic as if it notices the table.",
   openingNarrative:

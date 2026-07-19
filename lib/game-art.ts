@@ -1,38 +1,26 @@
-/** Curated high-res art plates for the Voidline tabletop client. */
+/** Authored Voidline art plates — painted D&D product style (local /public). */
 
-export const BOARD_TEXTURE =
-  'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=2400&q=80';
-
-export const MAP_SCENE =
-  'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2400&q=80';
-
-export const PARCHMENT_GRAIN =
-  'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=1600&q=60';
-
-export const GM_PORTRAIT =
-  'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=900&q=80';
+export const BOARD_TEXTURE = '/art/env/table-felt.webp';
+export const MAP_SCENE = '/art/env/room-bg.webp';
+export const PARCHMENT_GRAIN = '/art/env/parchment.webp';
+export const GM_PORTRAIT = '/art/env/gm-screen.webp';
+export const ROOM_BG = '/art/env/room-bg.webp';
+export const TABLE_FELT = '/art/env/table-felt.webp';
 
 const CLASS_PORTRAITS: Record<string, string> = {
-  Bard: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
-  Barbarian:
-    'https://images.unsplash.com/photo-1460194436988-671f763436b7?auto=format&fit=crop&w=800&q=80',
-  Rogue:
-    'https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=800&q=80',
-  Sorcerer:
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
-  Paladin:
-    'https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=800&q=80',
-  Adventurer:
-    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
+  Bard: '/art/portraits/portrait-bard.webp',
+  Barbarian: '/art/portraits/portrait-barbarian.webp',
+  Rogue: '/art/portraits/portrait-rogue.webp',
+  Sorcerer: '/art/portraits/portrait-sorcerer.webp',
+  Paladin: '/art/portraits/portrait-paladin.webp',
+  Adventurer: '/art/portraits/portrait-adventurer.webp',
 };
 
-/** Stable alternate plates keyed by player name for Aden / Edward / Jamie. */
+/** Stable plates for Aden / Edward / Jamie. */
 const NAME_PORTRAITS: Record<string, string> = {
-  aden: 'https://images.unsplash.com/photo-1460194436988-671f763436b7?auto=format&fit=crop&w=800&q=80',
-  edward:
-    'https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&w=800&q=80',
-  jamie:
-    'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
+  aden: '/art/portraits/portrait-aden.webp',
+  edward: '/art/portraits/portrait-edward.webp',
+  jamie: '/art/portraits/portrait-jamie.webp',
 };
 
 export function portraitForPlayer(userName?: string | null, avatarClass?: string | null): string {
@@ -64,3 +52,24 @@ export const INVENTORY_SLOTS = [
   { id: 'ring', label: 'Enchanted Ring', src: RELIC_ICONS.ring },
   { id: 'amulet', label: 'Enchanted Jewel', src: RELIC_ICONS.amulet },
 ] as const;
+
+export const CAMPAIGN_ART = {
+  ashcrown: {
+    cover: '/art/campaigns/campaign-ashcrown.webp',
+    table: '/art/env/table-felt.webp',
+    map: '/art/campaigns/campaign-ashcrown.webp',
+    gm: '/art/env/gm-screen.webp',
+  },
+  saltwake: {
+    cover: '/art/campaigns/campaign-saltwake.webp',
+    table: '/art/env/table-felt.webp',
+    map: '/art/campaigns/campaign-saltwake.webp',
+    gm: '/art/env/gm-screen.webp',
+  },
+  blackroot: {
+    cover: '/art/campaigns/campaign-blackroot.webp',
+    table: '/art/env/table-felt.webp',
+    map: '/art/campaigns/campaign-blackroot.webp',
+    gm: '/art/env/gm-screen.webp',
+  },
+} as const;

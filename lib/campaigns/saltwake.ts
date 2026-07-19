@@ -1,4 +1,5 @@
 import type { CampaignDefinition } from "./types";
+import { CAMPAIGN_ART } from "@/lib/game-art";
 
 export const saltwakeBargain: CampaignDefinition = {
   id: "saltwake",
@@ -6,14 +7,10 @@ export const saltwakeBargain: CampaignDefinition = {
   tagline: "A port that collects debts in tide and bone.",
   tone: "Coastal noir with folk-horror undertow. Humor like a dockside joke that stops too soon.",
   themes: ["debt", "tide clocks", "folk horror", "harbor noir"],
-  coverArt:
-    "https://images.unsplash.com/photo-1505142468610-359e7d316be0?auto=format&fit=crop&w=1600&q=80",
-  tableArt:
-    "https://images.unsplash.com/photo-1439405326854-014607f694d7?auto=format&fit=crop&w=2000&q=80",
-  mapArt:
-    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80",
-  gmScreenArt:
-    "https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1200&q=80",
+  coverArt: CAMPAIGN_ART.saltwake.cover,
+  tableArt: CAMPAIGN_ART.saltwake.table,
+  mapArt: CAMPAIGN_ART.saltwake.map,
+  gmScreenArt: CAMPAIGN_ART.saltwake.gm,
   voiceBible:
     "Speak like a harbor notary who has seen drownings filed as paperwork. Fog, rope, and unpaid favors. When the deep bargains surface, drop noir cool and describe the tide as if it is collecting personally.",
   openingNarrative:

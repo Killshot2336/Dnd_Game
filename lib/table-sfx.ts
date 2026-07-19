@@ -1,25 +1,22 @@
-/** Tiny Web Audio table SFX + ambient bed — no asset files. */
+/** Table Foley + ambient beds from /public/audio (authored loops + hits). */
 
-let sharedCtx: AudioContext | null = null;
 let muted = false;
-let ambientNodes: { stop: () => void } | null = null;
+let ambientEl: HTMLAudioElement | null = null;
 
-function ctx(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
-  if (muted) return null;
+function canPlay(): boolean {
+  return typeof window !== 'undefined' && !muted;
+}
+
+function playFile(src: string, volume = 0.45) {
+  if (!canPlay()) return;
   try {
-    if (!sharedCtx) {
-      const AC =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      sharedCtx = new AC();
-    }
-    if (sharedCtx.state === 'suspended') {
-      void sharedCtx.resume();
-    }
-    return sharedCtx;
+    const audio = new Audio(src);
+    audio.volume = Math.min(1, Math.max(0, volume));
+    void audio.play().catch(() => {
+      // Autoplay policies — ignore until user gesture
+    });
   } catch {
-    return null;
+    // ignore
   }
 }
 
@@ -32,138 +29,95 @@ export function isTableSfxMuted() {
   return muted;
 }
 
-function blip(
-  frequency: number,
-  duration: number,
-  type: OscillatorType = 'square',
-  gain = 0.04,
-  delay = 0
-) {
-  const audio = ctx();
-  if (!audio) return;
-  const t0 = audio.currentTime + delay;
-  const osc = audio.createOscillator();
-  const g = audio.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(frequency, t0);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
-  osc.connect(g);
-  g.connect(audio.destination);
-  osc.start(t0);
-  osc.stop(t0 + duration + 0.02);
-}
-
 export function playDiceClack() {
-  blip(180, 0.06, 'triangle', 0.05);
-  blip(320, 0.05, 'square', 0.03, 0.04);
-  blip(140, 0.08, 'sawtooth', 0.025, 0.09);
+  playFile('/audio/sfx-dice.mp3', 0.55);
 }
 
 export function playWaxStamp() {
-  blip(90, 0.1, 'sine', 0.06);
-  blip(60, 0.14, 'triangle', 0.04, 0.05);
+  playFile('/audio/sfx-wax.mp3', 0.5);
 }
 
 export function playWoodThud() {
-  blip(70, 0.08, 'sine', 0.05);
+  playFile('/audio/sfx-wood.mp3', 0.45);
 }
 
 export function playFanfareTick() {
-  blip(440, 0.07, 'square', 0.035);
-  blip(660, 0.09, 'triangle', 0.03, 0.06);
+  playFile('/audio/sfx-wax.mp3', 0.35);
+  window.setTimeout(() => playFile('/audio/sfx-page.mp3', 0.3), 80);
 }
 
 export function playWhisperRustle() {
-  blip(520, 0.04, 'triangle', 0.02);
-  blip(400, 0.05, 'sine', 0.015, 0.03);
+  playFile('/audio/sfx-page.mp3', 0.28);
 }
 
 export function playPageTurn() {
-  blip(220, 0.08, 'triangle', 0.03);
-  blip(180, 0.12, 'sawtooth', 0.02, 0.05);
-  blip(140, 0.1, 'sine', 0.025, 0.1);
+  playFile('/audio/sfx-page.mp3', 0.42);
 }
 
 export function playBootWhoosh() {
-  blip(55, 0.35, 'sine', 0.045);
-  blip(90, 0.28, 'triangle', 0.03, 0.08);
-  blip(40, 0.4, 'sine', 0.035, 0.12);
+  playFile('/audio/sfx-boot.mp3', 0.4);
 }
 
 export function playScreenPunch() {
-  blip(70, 0.05, 'square', 0.04);
-  blip(110, 0.06, 'triangle', 0.025, 0.03);
+  playFile('/audio/sfx-wood.mp3', 0.35);
 }
 
-/** Low room drone — flavor by campaign id. */
+function ambientForFlavor(flavor: string): string {
+  if (flavor === 'saltwake') return '/audio/ambient-harbor.mp3';
+  if (flavor === 'blackroot') return '/audio/ambient-carnival.mp3';
+  return '/audio/ambient-tavern.mp3';
+}
+
+/** Looping room bed — tavern / harbor / carnival by campaign. */
 export function startAmbientBed(flavor = 'default') {
-  if (muted) return;
+  if (!canPlay()) return;
   stopAmbientBed();
-  const audio = ctx();
-  if (!audio) return;
-
-  const master = audio.createGain();
-  master.gain.value = 0.0001;
-  master.connect(audio.destination);
-  master.gain.exponentialRampToValueAtTime(0.028, audio.currentTime + 1.8);
-
-  const baseFreq =
-    flavor === 'saltwake' ? 48 : flavor === 'blackroot' ? 62 : flavor === 'ashcrown' ? 55 : 52;
-  const oscA = audio.createOscillator();
-  const oscB = audio.createOscillator();
-  oscA.type = 'sine';
-  oscB.type = 'triangle';
-  oscA.frequency.value = baseFreq;
-  oscB.frequency.value = baseFreq * 1.5;
-  const gA = audio.createGain();
-  const gB = audio.createGain();
-  gA.gain.value = 0.55;
-  gB.gain.value = 0.22;
-  oscA.connect(gA);
-  oscB.connect(gB);
-  gA.connect(master);
-  gB.connect(master);
-  oscA.start();
-  oscB.start();
-
-  // Soft noise bed via detuned pair as "air"
-  const lfo = audio.createOscillator();
-  const lfoGain = audio.createGain();
-  lfo.frequency.value = 0.07;
-  lfoGain.gain.value = 4;
-  lfo.connect(lfoGain);
-  lfoGain.connect(oscA.frequency);
-  lfo.start();
-
-  ambientNodes = {
-    stop: () => {
-      try {
-        const t = audio.currentTime;
-        master.gain.cancelScheduledValues(t);
-        master.gain.setValueAtTime(master.gain.value, t);
-        master.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-        window.setTimeout(() => {
-          try {
-            oscA.stop();
-            oscB.stop();
-            lfo.stop();
-            master.disconnect();
-          } catch {
-            // ignore
-          }
-        }, 700);
-      } catch {
-        // ignore
-      }
-    },
-  };
+  try {
+    const el = new Audio(ambientForFlavor(flavor));
+    el.loop = true;
+    el.volume = 0.0001;
+    ambientEl = el;
+    void el.play().then(() => {
+      // Soft fade in
+      const start = performance.now();
+      const fade = () => {
+        if (!ambientEl) return;
+        const t = Math.min(1, (performance.now() - start) / 1800);
+        ambientEl.volume = 0.16 * t;
+        if (t < 1) requestAnimationFrame(fade);
+      };
+      requestAnimationFrame(fade);
+    }).catch(() => {
+      ambientEl = null;
+    });
+  } catch {
+    ambientEl = null;
+  }
 }
 
 export function stopAmbientBed() {
-  if (ambientNodes) {
-    ambientNodes.stop();
-    ambientNodes = null;
+  if (!ambientEl) return;
+  const el = ambientEl;
+  ambientEl = null;
+  try {
+    const startVol = el.volume;
+    const start = performance.now();
+    const fade = () => {
+      const t = Math.min(1, (performance.now() - start) / 500);
+      el.volume = startVol * (1 - t);
+      if (t < 1) {
+        requestAnimationFrame(fade);
+      } else {
+        el.pause();
+        el.src = '';
+      }
+    };
+    requestAnimationFrame(fade);
+  } catch {
+    try {
+      el.pause();
+    } catch {
+      // ignore
+    }
   }
 }

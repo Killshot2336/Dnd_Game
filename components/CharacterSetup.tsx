@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
 import GameStage from '@/components/aaa/GameStage';
 import { CHARACTER_TEMPLATES, getTemplate } from '@/lib/character-presets';
-import { portraitForPlayer } from '@/lib/game-art';
+import { portraitForPlayer, ROOM_BG } from '@/lib/game-art';
 import {
   formatModifier,
   generateCharacterSeed,
@@ -234,10 +234,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
       <div className="fixed inset-0 z-50 overflow-y-auto custom-scrollbar">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-28 plate-ink parallax-drift"
-          style={{
-            backgroundImage:
-              'url(https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2400&q=80)',
-          }}
+          style={{ backgroundImage: `url(${ROOM_BG})` }}
           aria-hidden
         />
         <div className="absolute inset-0 bg-[#120c08]/82" />
@@ -501,10 +498,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-cover bg-center opacity-32 plate-ink parallax-drift"
-        style={{
-          backgroundImage:
-            'url(https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=2400&q=80)',
-        }}
+        style={{ backgroundImage: `url(${ROOM_BG})` }}
       />
       <div className="absolute inset-0 bg-[#120c08]/80" />
 
