@@ -156,7 +156,7 @@
 }
 
 .fp-table-plane {
-  transform: perspective(var(--table-perspective, 900px)) rotateX(var(--table-tilt, 22deg))
+  transform: perspective(var(--table-perspective, 900px)) rotateX(var(--table-tilt, 25deg))
     scale(var(--table-scale, 1.12));
   transform-origin: 50% 100%;
   transform-style: preserve-3d;
@@ -257,7 +257,7 @@
   box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.6);
 }
 
-/* ——— Chronicle: book resting on near wood ——— */
+/* ——— Chronicle: grid ledger lying flat on the felt (inherits plane tilt) ——— */
 .chronicle-book {
   margin-top: -2.25rem !important;
   background-color: var(--v3-parchment) !important;
@@ -268,6 +268,85 @@
     0 -18px 0 var(--v3-wood-mid),
     0 28px 60px rgba(0, 0, 0, 0.75) !important;
   animation: v3-book-settle 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chronicle-on-felt {
+  position: absolute !important;
+  left: 50%;
+  top: 48%;
+  z-index: 16;
+  width: min(78%, 34rem);
+  height: min(52%, 26rem);
+  margin: 0 !important;
+  transform: translate(-50%, -50%) translateZ(16px) !important;
+  transform-style: preserve-3d;
+  opacity: 0.9;
+  pointer-events: auto;
+  animation: v3-felt-ledger-settle 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  box-shadow:
+    inset 0 0 50px rgba(80, 50, 20, 0.22),
+    0 18px 40px rgba(0, 0, 0, 0.45) !important;
+  background-color: rgba(228, 208, 162, 0.9) !important;
+  border: 1px solid rgba(107, 68, 35, 0.65) !important;
+  clip-path: none !important;
+}
+
+@keyframes v3-felt-ledger-settle {
+  from {
+    opacity: 0.35;
+    transform: translate(-50%, -42%) translateZ(8px) scale(0.96);
+  }
+  to {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) translateZ(16px) scale(1);
+  }
+}
+
+/* ——— Physical action dock: wood/glass panel at the screen bottom rail ——— */
+.action-dock {
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 1rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.65rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(42, 28, 18, 0.72), rgba(18, 12, 8, 0.92)),
+    rgba(28, 18, 12, 0.88);
+  border: 1px solid rgba(184, 150, 92, 0.45);
+  border-bottom: none;
+  border-radius: 0.85rem 0.85rem 0 0;
+  box-shadow:
+    0 -16px 40px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 230, 180, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #f0e2c4;
+}
+
+.action-dock--lit {
+  box-shadow:
+    0 -16px 40px rgba(0, 0, 0, 0.55),
+    0 0 24px rgba(245, 158, 11, 0.22),
+    inset 0 1px 0 rgba(255, 230, 180, 0.16);
+}
+
+.action-dock .quill-input {
+  color: #f0e2c4;
+  background: rgba(10, 6, 4, 0.45);
+  border: 1px solid rgba(107, 68, 35, 0.55);
+  border-radius: 0.35rem;
+}
+
+.action-dock .quill-input::placeholder {
+  color: rgba(203, 184, 150, 0.65);
+}
+
+.action-dock .dice-tray {
+  justify-content: center;
 }
 
 @keyframes v3-book-settle {

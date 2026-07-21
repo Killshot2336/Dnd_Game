@@ -12,7 +12,7 @@
   --app-pad-right: env(safe-area-inset-right, 0px);
   --table-flex: 1.1fr;
   --book-flex: 1fr;
-  --table-tilt: 22deg;
+  --table-tilt: 25deg;
   --table-scale: 1.12;
   --table-perspective: 900px;
   --ink-size: clamp(15px, 2.6vw, 17px);
@@ -62,58 +62,61 @@ body {
   }
 }
 
-/* ——— Room split: fluid modes ——— */
+/* ——— Room stage: full-viewport immersive table (no table/book grid split) ——— */
 .room-split {
   position: relative;
   z-index: 10;
-  display: grid;
-  grid-template-areas:
-    'table'
-    'book';
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(140px, var(--table-flex)) minmax(200px, var(--book-flex));
-  gap: 0;
+  display: block;
   height: calc(var(--app-height) - var(--app-pad-top) - var(--app-pad-bottom));
   max-height: calc(var(--app-height) - var(--app-pad-top) - var(--app-pad-bottom));
   width: 100%;
-  padding: 0.35rem 0.35rem 0;
+  width: 100vw;
+  padding: 0;
   box-sizing: border-box;
   overflow: hidden;
+}
+
+.room-split--immersive {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
 }
 
 .room-split > .board-frame,
 .room-split > .fp-table-stage,
 .room-split > section.board-frame {
-  grid-area: table;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   min-height: 0;
 }
 
-.room-split > .chronicle-book,
-.room-split > section.chronicle-book {
-  grid-area: book;
-  min-height: 0;
+.room-split > .action-dock {
+  position: absolute;
+  z-index: 45;
 }
 
-/* Phone portrait: book-forward for play */
+/* Phone portrait: keep felt readable behind the on-table ledger */
 @media (max-width: 639px) {
   :root {
     --table-flex: 0.72fr;
     --book-flex: 1.28fr;
-    --table-tilt: 18deg;
-    --table-scale: 1.08;
+    --table-tilt: 20deg;
+    --table-scale: 1.06;
     --table-perspective: 900px;
-  }
-
-  .room-split {
-    padding: 0.25rem 0.25rem 0;
-  }
-
-  .chronicle-book {
-    margin-top: -1.1rem !important;
   }
 
   .fp-gm-seat {
     width: min(78%, 14rem) !important;
+  }
+
+  .chronicle-on-felt {
+    width: min(94%, 28rem) !important;
+    height: min(48%, 22rem) !important;
+    top: 46% !important;
   }
 }
 
@@ -122,23 +125,20 @@ body {
     --table-flex: 1.2fr;
     --book-flex: 0.9fr;
   }
-
-  .room-split {
-    padding: 0.5rem 0.75rem 0;
-  }
 }
 
 @media (min-width: 900px) {
   :root {
     --table-flex: 1.35fr;
     --book-flex: 0.8fr;
-    --table-tilt: 22deg;
+    --table-tilt: 25deg;
     --table-scale: 1.12;
     --table-perspective: 900px;
   }
 
-  .room-split {
-    padding: 0.65rem 1rem 0;
+  .chronicle-on-felt {
+    width: min(70%, 36rem) !important;
+    height: min(50%, 28rem) !important;
   }
 }
 
@@ -159,7 +159,7 @@ html.vv-tiny {
   --book-flex: 1.35fr;
 }
 
-/* Landscape phones / short landscape: side-by-side */
+/* Landscape phones: ledger still on-felt; dock stays bottom-center */
 @media (orientation: landscape) and (max-height: 520px) {
   :root {
     --table-tilt: 14deg;
@@ -167,15 +167,10 @@ html.vv-tiny {
     --table-perspective: 760px;
   }
 
-  .room-split {
-    grid-template-areas: 'table book';
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-    padding: 0.25rem 0.35rem;
-  }
-
-  .chronicle-book {
-    margin-top: 0 !important;
+  .chronicle-on-felt {
+    width: min(52%, 26rem) !important;
+    height: min(62%, 18rem) !important;
+    top: 48% !important;
   }
 
   .v3-sconce-far {
@@ -183,10 +178,9 @@ html.vv-tiny {
   }
 }
 
-html.vv-landscape.vv-narrow .room-split {
-  grid-template-areas: 'table book';
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+html.vv-landscape.vv-narrow .chronicle-on-felt {
+  width: min(52%, 26rem) !important;
+  height: min(62%, 18rem) !important;
 }
 
 /* Apply fluid table transform */
@@ -235,17 +229,17 @@ html.vv-landscape.vv-narrow .room-split {
   padding-bottom: max(0.5rem, var(--app-pad-bottom));
 }
 
-html.vv-keyboard .room-split {
-  --table-flex: 0.35fr;
-  --book-flex: 1.65fr;
+html.vv-keyboard .fp-table-stage {
+  opacity: 0.7;
 }
 
-html.vv-keyboard .board-frame {
-  opacity: 0.55;
+html.vv-keyboard .chronicle-on-felt {
+  height: min(36%, 14rem) !important;
+  top: 38% !important;
 }
 
-html.vv-keyboard .chronicle-book {
-  margin-top: 0 !important;
+html.vv-keyboard .action-dock {
+  max-height: 46vh;
 }
 
 html.vv-keyboard .quill-input {

@@ -2169,12 +2169,20 @@ function GameRoom({ params }: { params: { code: string } }) {
         </div>
       )}
 
-      <div className="relative z-10 room-split">
-        {/* 2.5D TABLE */}
-        <section className="board-frame relative overflow-hidden min-h-0 fp-table-stage">
+      {/*
+        Immersive table stage: full-viewport 2.5D plane.
+        Chronicle ledger sits ON the felt (inherits rotateX tilt).
+        Dice + quill form stay in screen space at the bottom rail (physical hands).
+        Multiplayer channel listeners, message filters, and execute handlers are unchanged.
+      */}
+      <div className="relative z-10 room-split room-split--immersive">
+        <section
+          className="board-frame relative overflow-hidden min-h-0 fp-table-stage"
+          aria-label="First-person table stage"
+        >
           <div className="absolute inset-0 bg-[#1a100c]" />
           <div
-            className="absolute inset-[-8%_-5%_8%] fp-table-plane fp-table-felt"
+            className="absolute inset-[-6%_-3%_0] fp-table-plane fp-table-felt"
             style={{
               backgroundImage: `linear-gradient(180deg, rgba(20,12,8,0.4), rgba(10,6,4,0.7)), url(${tableArt})`,
               backgroundSize: 'cover',
@@ -2184,9 +2192,9 @@ function GameRoom({ params }: { params: { code: string } }) {
             <div className="absolute left-1/4 top-1/3 w-28 h-28 fp-lantern" />
             <div className="absolute right-1/4 top-1/4 w-24 h-24 fp-lantern" />
 
-            {/* GM screen at far end */}
+            {/* GM screen at far end of the warped plane */}
             <div
-              className={`absolute top-[5%] left-1/2 -translate-x-1/2 z-20 w-[min(72%,17rem)] fp-gm-seat dm-screen p-2 sm:p-3 flex flex-col items-center gap-2 text-center ${
+              className={`absolute top-[4%] left-1/2 -translate-x-1/2 z-20 w-[min(72%,17rem)] fp-gm-seat dm-screen p-2 sm:p-3 flex flex-col items-center gap-2 text-center ${
                 isGMLoading ? 'gm-breathe' : ''
               }`}
             >
@@ -2240,6 +2248,132 @@ function GameRoom({ params }: { params: { code: string } }) {
               combatants={vaultRoom.clash.combatants}
               onZone={isHost ? handleClashZone : undefined}
             />
+
+            {/* Grid ledger — flat on the felt, inherits table perspective tilt */}
+            <section
+              className={`parchment-panel chronicle-book chronicle-on-felt min-h-0 flex flex-col overflow-hidden ${
+                inkBleed ? 'v3-ink-bleed' : ''
+              }`}
+              aria-label="Session chronicle on the table"
+            >
+              <div className="chronicle-margin px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <p className="italic">
+                  {campaign ? `${campaign.title}` : 'The chronicle'}
+                  {lastSpeaker ? ` · last voice: ${lastSpeaker}` : ''}
+                </p>
+                {isGMLoading && (
+                  <span className="italic text-[#7f1d1d]">Ink still wet…</span>
+                )}
+              </div>
+
+              <div className="px-3 py-1.5 flex flex-wrap items-center gap-2 border-b border-[#8b5e34]/30 shrink-0">
+                <span className="text-[11px] italic text-[#5c3a21] mr-1">Who holds the lantern</span>
+                <button
+                  type="button"
+                  onClick={() => handlePassSpotlight(null)}
+                  className="flex items-center gap-1"
+                  title="Open table"
+                >
+                  <span
+                    className={`lantern-seat ${!tableMeta.spotlight ? '' : 'lantern-seat-dim'}`}
+                  />
+                  <span className="text-[11px] italic text-[#5c3a21]">open</span>
+                </button>
+                {players.map((player) => {
+                  const on =
+                    tableMeta.spotlight?.toLowerCase() ===
+                    player.user_name.toLowerCase();
+                  return (
+                    <button
+                      key={`spot-${player.id}`}
+                      type="button"
+                      onClick={() => handlePassSpotlight(player.user_name)}
+                      className="flex items-center gap-1"
+                      title={`Spotlight ${player.user_name}`}
+                    >
+                      <span className={`lantern-seat ${on ? '' : 'lantern-seat-dim'}`} />
+                      <span className="text-[11px] italic text-[#2a160e]">
+                        {player.user_name}
+                      </span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={handleRecap}
+                  className="prop-ribbon ml-auto"
+                  title="Turn back a page — recap"
+                  aria-label="Session recap"
+                >
+                  <span className="prop-ribbon-glyph block" />
+                </button>
+              </div>
+
+              {vaultRoom.chapters[0] && (
+                <div className="vault-chapters shrink-0">
+                  <p className="vault-chapter-line">
+                    Chapter — {vaultRoom.chapters[0].title}
+                  </p>
+                </div>
+              )}
+
+              <BeatChoices
+                beats={vaultRoom.pendingBeats}
+                disabled={isGMLoading}
+                onChoose={handleBeatChoice}
+              />
+
+              <PendingChecks
+                checks={vaultRoom.pendingChecks}
+                disabled={isGMLoading}
+                onRoll={handlePendingCheck}
+              />
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-3 space-y-3 min-h-0">
+                {visibleMessages.length === 0 && (
+                  <p className="ink-entry-body italic whitespace-pre-wrap">{narrative}</p>
+                )}
+                {visibleMessages.map((message) => {
+                  const isGm = message?.sender === 'GM';
+                  const isChronicle = message?.sender === 'Chronicle';
+                  const whisper = parseWhisperMessage(message?.content ?? '');
+                  const roll = parseRollMessage(message?.content ?? '');
+                  const buddyMsg = parseBuddyTableMessage(message?.content ?? '');
+                  return (
+                    <div
+                      key={`${message.id}-${message.created_at}`}
+                      className={`ink-line ${buddyMsg ? 'v3-buddy-slip' : ''}`}
+                    >
+                      <p
+                        className={`ink-entry-name ${
+                          isGm || isChronicle ? 'ink-entry-gm' : ''
+                        } ${whisper ? 'text-[#1e3a5f]' : ''} ${roll ? 'text-[#8b4510]' : ''} ${
+                          buddyMsg ? 'ink-entry-buddy' : ''
+                        }`}
+                      >
+                        {whisper
+                          ? `Passed note — ${whisper.from} to ${whisper.to}`
+                          : buddyMsg
+                            ? `To the Arbiter — ${buddyMsg.from}`
+                            : roll
+                              ? message?.content?.replace(/^🎲\s*/, '') ?? ''
+                              : message?.sender ?? 'Unknown'}
+                      </p>
+                      {!roll && (
+                        <p className="ink-entry-body whitespace-pre-wrap">
+                          {whisper
+                            ? whisper.body
+                            : buddyMsg
+                              ? buddyMsg.body
+                              : message?.content ?? ''}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <div ref={terminalEndRef} />
+              </div>
+            </section>
           </div>
 
           <ReactiveStateStrip
@@ -2249,184 +2383,62 @@ function GameRoom({ params }: { params: { code: string } }) {
           <MomentsStrip highlights={arbiterMemory.highlights} />
         </section>
 
-        {/* BOOK PAGE resting on the near edge */}
-        <section
-          className={`parchment-panel chronicle-book min-h-0 flex flex-col overflow-hidden ${
-            inkBleed ? 'v3-ink-bleed' : ''
+        {/* Physical action dock — screen-space bottom center (hands at the rail) */}
+        <form
+          className={`action-dock quill-well ${
+            vaultRoom.pendingChecks.length ? 'action-dock--lit' : ''
           }`}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleExecuteAction();
+          }}
+          aria-label="Dice and quill at the table edge"
         >
-          <div className="chronicle-margin px-4 py-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="italic">
-              {campaign ? `${campaign.title}` : 'The chronicle'}
-              {lastSpeaker ? ` · last voice: ${lastSpeaker}` : ''}
-            </p>
-            {isGMLoading && (
-              <span className="italic text-[#7f1d1d]">Ink still wet…</span>
-            )}
-          </div>
-
-          {/* Lantern seats = spotlight, ribbon = recap */}
-          <div className="px-3 py-1.5 flex flex-wrap items-center gap-2 border-b border-[#8b5e34]/30">
-            <span className="text-[11px] italic text-[#5c3a21] mr-1">Who holds the lantern</span>
-            <button
-              type="button"
-              onClick={() => handlePassSpotlight(null)}
-              className="flex items-center gap-1"
-              title="Open table"
-            >
-              <span
-                className={`lantern-seat ${!tableMeta.spotlight ? '' : 'lantern-seat-dim'}`}
-              />
-              <span className="text-[11px] italic text-[#5c3a21]">open</span>
-            </button>
-            {players.map((player) => {
-              const on =
-                tableMeta.spotlight?.toLowerCase() ===
-                player.user_name.toLowerCase();
-              return (
-                <button
-                  key={`spot-${player.id}`}
-                  type="button"
-                  onClick={() => handlePassSpotlight(player.user_name)}
-                  className="flex items-center gap-1"
-                  title={`Spotlight ${player.user_name}`}
-                >
-                  <span className={`lantern-seat ${on ? '' : 'lantern-seat-dim'}`} />
-                  <span className="text-[11px] italic text-[#2a160e]">
-                    {player.user_name}
-                  </span>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={handleRecap}
-              className="prop-ribbon ml-auto"
-              title="Turn back a page — recap"
-              aria-label="Session recap"
-            >
-              <span className="prop-ribbon-glyph block" />
-            </button>
-          </div>
-
-          {vaultRoom.chapters[0] && (
-            <div className="vault-chapters">
-              <p className="vault-chapter-line">
-                Chapter — {vaultRoom.chapters[0].title}
-              </p>
-            </div>
-          )}
-
-          <BeatChoices
-            beats={vaultRoom.pendingBeats}
-            disabled={isGMLoading}
-            onChoose={handleBeatChoice}
-          />
-
-          <PendingChecks
-            checks={vaultRoom.pendingChecks}
-            disabled={isGMLoading}
-            onRoll={handlePendingCheck}
-          />
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-3 space-y-3">
-            {visibleMessages.length === 0 && (
-              <p className="ink-entry-body italic whitespace-pre-wrap">{narrative}</p>
-            )}
-            {visibleMessages.map((message) => {
-              const isGm = message?.sender === 'GM';
-              const isChronicle = message?.sender === 'Chronicle';
-              const whisper = parseWhisperMessage(message?.content ?? '');
-              const roll = parseRollMessage(message?.content ?? '');
-              const buddyMsg = parseBuddyTableMessage(message?.content ?? '');
-              return (
-                <div
-                  key={`${message.id}-${message.created_at}`}
-                  className={`ink-line ${buddyMsg ? 'v3-buddy-slip' : ''}`}
-                >
-                  <p
-                    className={`ink-entry-name ${
-                      isGm || isChronicle ? 'ink-entry-gm' : ''
-                    } ${whisper ? 'text-[#1e3a5f]' : ''} ${roll ? 'text-[#8b4510]' : ''} ${
-                      buddyMsg ? 'ink-entry-buddy' : ''
-                    }`}
-                  >
-                    {whisper
-                      ? `Passed note — ${whisper.from} to ${whisper.to}`
-                      : buddyMsg
-                        ? `To the Arbiter — ${buddyMsg.from}`
-                        : roll
-                          ? message?.content?.replace(/^🎲\s*/, '') ?? ''
-                          : message?.sender ?? 'Unknown'}
-                  </p>
-                  {!roll && (
-                    <p className="ink-entry-body whitespace-pre-wrap">
-                      {whisper
-                        ? whisper.body
-                        : buddyMsg
-                          ? buddyMsg.body
-                          : message?.content ?? ''}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-            <div ref={terminalEndRef} />
-          </div>
-
-          <form
-            className="quill-well px-3 sm:px-4 py-2 sm:py-3 space-y-2 shrink-0"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleExecuteAction();
-            }}
-          >
-            <div className={`dice-tray ${vaultRoom.pendingChecks.length ? 'dice-tray-lit' : ''}`}>
-              {['1d20', '1d20+5', '2d6', '1d8'].map((expr) => (
-                <button
-                  key={expr}
-                  type="button"
-                  onClick={() => handleQuickRoll(expr)}
-                  className="bone-die"
-                  title={`Roll ${expr}`}
-                >
-                  {expr.replace('1d', 'd')}
-                </button>
-              ))}
-            </div>
-            <textarea
-              value={inputMessage}
-              onChange={(event) => setInputMessage(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  void handleExecuteAction();
-                }
-              }}
-              rows={2}
-              placeholder="Deed, /roll, or /gm ask your buddy…"
-              className="quill-input w-full text-[16px] px-1 py-2 max-h-[30vh]"
-              disabled={isGMLoading}
-            />
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[12px] italic text-[#5c3a21]">
-                /gm for side help · Enter seals the ink
-              </p>
+          <div className={`dice-tray ${vaultRoom.pendingChecks.length ? 'dice-tray-lit' : ''}`}>
+            {['1d20', '1d20+5', '2d6', '1d8'].map((expr) => (
               <button
-                type="submit"
-                disabled={!inputMessage.trim() || isGMLoading}
-                className={`wax-button px-5 py-2 text-[11px] ${stampPulse ? 'v3-stamp-pulse' : ''}`}
-                onClick={() => {
-                  setStampPulse(true);
-                  playWaxStamp();
-                  window.setTimeout(() => setStampPulse(false), 400);
-                }}
+                key={expr}
+                type="button"
+                onClick={() => handleQuickRoll(expr)}
+                className="bone-die"
+                title={`Roll ${expr}`}
               >
-                {isGMLoading ? '…' : 'Seal'}
+                {expr.replace('1d', 'd')}
               </button>
-            </div>
-          </form>
-        </section>
+            ))}
+          </div>
+          <textarea
+            value={inputMessage}
+            onChange={(event) => setInputMessage(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void handleExecuteAction();
+              }
+            }}
+            rows={2}
+            placeholder="Deed, /roll, or /gm ask your buddy…"
+            className="quill-input w-full text-[16px] px-1 py-2 max-h-[28vh]"
+            disabled={isGMLoading}
+          />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[12px] italic text-[#cbb896]">
+              /gm for side help · Enter seals the ink
+            </p>
+            <button
+              type="submit"
+              disabled={!inputMessage.trim() || isGMLoading}
+              className={`wax-button px-5 py-2 text-[11px] ${stampPulse ? 'v3-stamp-pulse' : ''}`}
+              onClick={() => {
+                setStampPulse(true);
+                playWaxStamp();
+                window.setTimeout(() => setStampPulse(false), 400);
+              }}
+            >
+              {isGMLoading ? '…' : 'Seal'}
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Leather satchel / character sheet */}
