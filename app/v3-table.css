@@ -160,6 +160,7 @@
   transform-origin: 50% 100%;
   transform-style: preserve-3d;
   filter: blur(0px);
+  z-index: 2;
 }
 
 .fp-table-felt {
