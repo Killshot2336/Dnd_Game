@@ -12,7 +12,7 @@
   --app-pad-right: env(safe-area-inset-right, 0px);
   --table-flex: 1.1fr;
   --book-flex: 1fr;
-  --table-tilt: 22deg;
+  --table-tilt: 25deg;
   --table-scale: 1.12;
   --table-perspective: 900px;
   --ink-size: clamp(15px, 2.6vw, 17px);
@@ -132,7 +132,7 @@ body {
   :root {
     --table-flex: 1.35fr;
     --book-flex: 0.8fr;
-    --table-tilt: 22deg;
+    --table-tilt: 25deg;
     --table-scale: 1.12;
     --table-perspective: 900px;
   }

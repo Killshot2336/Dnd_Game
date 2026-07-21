@@ -3,55 +3,95 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Voidline — First-Person Table</title>
+    <title>Voidline — First-Person Table Plane</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/css/fov-table.css" />
   </head>
   <body>
     <div class="fov-root" id="fov-root">
-      <canvas id="fov-dice-canvas"></canvas>
-
-      <div class="fov-horizon" id="fov-horizon">
-        <div class="fov-arbiter">
-          <h1>The Arbiter</h1>
-          <p id="fov-arbiter-line">Looking back at you across the wood.</p>
+      <header class="fov-topbar">
+        <div>
+          <p class="fov-brand">VOIDLINE · IMMERSIVE TABLE</p>
+          <h1>Full-height perspective · ledger flat on the wood · hands at the rail</h1>
         </div>
-      </div>
+        <div class="fov-meta">
+          <span>Room <strong id="room-code">VL-DEMO</strong></span>
+          <span>You are <strong id="you-label">Mira</strong></span>
+          <span>Seat map <strong id="seat-summary">self · left · right</strong></span>
+        </div>
+      </header>
 
-      <div class="fov-table-stage" id="fov-table-stage">
+      <canvas id="fov-dice-canvas" aria-hidden="true"></canvas>
+
+      <!--
+        Single full-viewport stage. Arbiter, GM ledger, compose row, and peer
+        seats all live inside #fov-table-plane so they share
+        transform: perspective(900px) rotateX(25deg). The local player's hands
+        dock stays in screen space at the bottom edge (physical rail).
+      -->
+      <div class="fov-table-stage" id="fov-table-stage" aria-label="First-person table stage">
         <div class="fov-table-plane" id="fov-table-plane">
           <div class="fov-table-mesh" aria-hidden="true"></div>
+
+          <aside class="fov-arbiter" id="fov-arbiter" aria-label="Arbiter seat">
+            <p class="fov-arbiter-kicker">Across the table</p>
+            <h2>The Arbiter</h2>
+            <p class="fov-arbiter-copy" id="fov-arbiter-line">
+              Narrative rulings land here. Dice thrown from your dock tumble forward across the ledger and settle on this rail.
+            </p>
+            <div class="fov-arbiter-status" id="arbiter-status">Awaiting the next throw…</div>
+          </aside>
+
+          <div class="fov-dice-rest" id="fov-dice-rest" aria-hidden="true"></div>
+
+          <section class="fov-ledger" aria-label="GM ledger on the table plane">
+            <div class="fov-ledger-header">
+              <span>Table ledger · session chronicle</span>
+              <span class="fov-ledger-live" id="ledger-live">Listening</span>
+            </div>
+            <div class="fov-scroll" id="fov-scroll" role="log" aria-live="polite" aria-relevant="additions"></div>
+            <form class="fov-ledger-compose" id="chat-form" autocomplete="off">
+              <label class="sr-only" for="chat-input">Message the table</label>
+              <input
+                class="fov-chat-input"
+                id="chat-input"
+                name="message"
+                type="text"
+                maxlength="280"
+                placeholder="Speak across the wood…"
+                aria-label="Chat message"
+              />
+              <button type="submit" class="fov-chat-send" id="chat-send">Send</button>
+            </form>
+          </section>
+
           <div
-            class="fov-seat-slot is-empty"
+            class="fov-seat-slot"
             data-seat="left"
             id="seat-left"
-            style="left: 16%; top: 46%"
+            aria-label="Left rail teammate"
           >
-            <div class="fov-seat-mini"></div>
-            <div class="fov-seat-name">Left seat</div>
-            <div class="fov-seat-hp">awaiting link…</div>
-          </div>
-          <div
-            class="fov-seat-slot is-empty"
-            data-seat="right"
-            id="seat-right"
-            style="left: 84%; top: 46%"
-          >
-            <div class="fov-seat-mini"></div>
-            <div class="fov-seat-name">Right seat</div>
-            <div class="fov-seat-hp">awaiting link…</div>
+            <div class="fov-seat-mini" id="seat-left-avatar">E</div>
+            <div class="fov-seat-name" id="seat-left-name">Edward</div>
+            <div class="fov-seat-hp" id="seat-left-hp">Left rail · peer</div>
           </div>
           <div
             class="fov-seat-slot"
-            data-seat="bottom"
-            id="seat-bottom"
-            style="left: 50%; top: 78%"
+            data-seat="right"
+            id="seat-right"
+            aria-label="Right rail teammate"
           >
+            <div class="fov-seat-mini" id="seat-right-avatar">J</div>
+            <div class="fov-seat-name" id="seat-right-name">Jamie</div>
+            <div class="fov-seat-hp" id="seat-right-hp">Right rail · peer</div>
+          </div>
+          <!-- Bottom seat is the screen-space hands dock; keep a hidden slot for engine map parity. -->
+          <div class="fov-seat-slot" data-seat="bottom" id="seat-bottom" hidden>
             <div class="fov-seat-mini"></div>
             <div class="fov-seat-name" id="seat-bottom-name">You</div>
             <div class="fov-seat-hp" id="seat-bottom-hp">HP — / —</div>
@@ -59,20 +99,20 @@
         </div>
       </div>
 
-      <aside class="fov-scroll" id="fov-scroll" aria-live="polite">
-        <p class="fov-scroll-line"><strong>Chronicle</strong></p>
-        <p class="fov-scroll-line">The table waits. Localized seats lock to your device.</p>
-      </aside>
-
-      <div class="fov-hands" id="fov-hands">
+      <div class="fov-hands" id="fov-hands" aria-label="Local player action dock">
         <div class="fov-hands-dock">
           <div class="fov-sheet-dock" id="fov-sheet-dock">
-            <div class="fov-seat-name">Character sheet dock</div>
-            <div class="fov-seat-hp">Equippable items rest at the edge of the wood.</div>
+            <div class="fov-seat-name" id="hands-name">Mira</div>
+            <div class="fov-seat-hp" id="hands-hint">Your hands at the table edge · dice launch from here</div>
           </div>
-          <div class="fov-dice-dock">
-            <button type="button" class="fov-roll-btn" id="fov-roll-d20">Roll D20</button>
+          <div class="fov-dice-dock" role="group" aria-label="Dice rollers">
+            <button type="button" class="fov-roll-btn" data-sides="20" id="fov-roll-d20">d20</button>
+            <button type="button" class="fov-roll-btn secondary" data-sides="12" id="fov-roll-d12">d12</button>
+            <button type="button" class="fov-roll-btn secondary" data-sides="8" id="fov-roll-d8">d8</button>
+            <button type="button" class="fov-roll-btn secondary" data-sides="6" id="fov-roll-d6">d6</button>
+            <button type="button" class="fov-roll-btn secondary" data-sides="4" id="fov-roll-d4">d4</button>
           </div>
+          <p class="fov-throw-readout" id="throw-readout">Ready · throw launches toward the Arbiter</p>
         </div>
       </div>
     </div>
@@ -80,14 +120,27 @@
     <script src="/js/gameStore.js"></script>
     <script src="/js/multiplayerEngine.js"></script>
     <script>
-      (function bootFovTable() {
+      (function bootFovTablePlane() {
         const store = window.gameStore;
         const engineApi = window.multiplayerEngine;
+        const CHAT_LISTENERS = new Set();
+
         const stage = document.getElementById('fov-table-stage');
         const plane = document.getElementById('fov-table-plane');
         const canvas = document.getElementById('fov-dice-canvas');
         const scroll = document.getElementById('fov-scroll');
-        const rollBtn = document.getElementById('fov-roll-d20');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const ledgerLive = document.getElementById('ledger-live');
+        const arbiterLine = document.getElementById('fov-arbiter-line');
+        const arbiterStatus = document.getElementById('arbiter-status');
+        const throwReadout = document.getElementById('throw-readout');
+        const diceRest = document.getElementById('fov-dice-rest');
+        const youLabel = document.getElementById('you-label');
+        const seatSummary = document.getElementById('seat-summary');
+        const handsName = document.getElementById('hands-name');
+        const handsHint = document.getElementById('hands-hint');
+
         const seatLeft = document.getElementById('seat-left');
         const seatRight = document.getElementById('seat-right');
         const seatBottom = document.getElementById('seat-bottom');
@@ -99,22 +152,25 @@
           engineApi.TABLE_PERSPECTIVE +
           ') rotateX(' +
           engineApi.TABLE_ROTATE_X +
-          ') scale(1.12)';
+          ') scale(1.08)';
 
         const demoPlayers = [
-          { id: 'aden', name: 'Aden', user_name: 'Aden', hp: 28, maxHp: 32 },
-          { id: 'edward', name: 'Edward', user_name: 'Edward', hp: 24, maxHp: 30 },
-          { id: 'jamie', name: 'Jamie', user_name: 'Jamie', hp: 22, maxHp: 26 },
+          { id: 'mira', name: 'Mira', user_name: 'Mira', hp: 28, maxHp: 32, color: '#7ec8ff' },
+          { id: 'edward', name: 'Edward', user_name: 'Edward', hp: 24, maxHp: 30, color: '#c4a574' },
+          { id: 'jamie', name: 'Jamie', user_name: 'Jamie', hp: 22, maxHp: 26, color: '#9ad7c2' },
         ];
 
         const params = new URLSearchParams(window.location.search);
-        const activeId = params.get('as') || 'aden';
+        const storedLocal = window.localStorage.getItem('voidline-fov-local-player');
+        const activeId = params.get('as') || storedLocal || 'mira';
+        window.localStorage.setItem('voidline-fov-local-player', activeId);
+
         store.setPlayers(demoPlayers);
         store.setActiveProfile(activeId);
         store.setAbsoluteTokenPositions({
-          aden: { x: 50, y: 78 },
-          edward: { x: 18, y: 44 },
-          jamie: { x: 82, y: 44 },
+          mira: { x: 50, y: 88 },
+          edward: { x: 14, y: 78 },
+          jamie: { x: 86, y: 78 },
         });
 
         const seatEls = {
@@ -123,55 +179,117 @@
           right: seatRight,
         };
 
-        const engine = engineApi.createEngine({
-          onFrame: function onFrame(frame) {
-            drawDice(frame.diceParticles);
-          },
-        });
+        let activeDie = null;
+        let throwToken = 0;
 
-        Object.keys(seatEls).forEach(function attachSeat(seat) {
-          engine.tokenLerp.attach(seat, seatEls[seat]);
-        });
+        /** Keep chat listener registration API intact for external modules / tests. */
+        window.voidlineFovChat = {
+          onMessage: function onMessage(listener) {
+            if (typeof listener !== 'function') return function noop() {};
+            CHAT_LISTENERS.add(listener);
+            return function unsubscribe() {
+              CHAT_LISTENERS.delete(listener);
+            };
+          },
+          getListeners: function getListeners() {
+            return Array.from(CHAT_LISTENERS);
+          },
+        };
+
+        function notifyChatListeners(entry) {
+          CHAT_LISTENERS.forEach(function eachListener(listener) {
+            try {
+              listener(entry);
+            } catch (err) {
+              console.error('[fov-chat] listener failed', err);
+            }
+          });
+        }
+
+        function appendScroll(speaker, text, kind) {
+          const line = document.createElement('p');
+          line.className =
+            'fov-scroll-line' +
+            (kind === 'roll' ? ' is-roll' : '') +
+            (kind === 'system' ? ' is-system' : '');
+          const strong = document.createElement('strong');
+          strong.textContent = speaker;
+          line.appendChild(strong);
+          line.appendChild(document.createTextNode(' — ' + text));
+          scroll.appendChild(line);
+          scroll.scrollTop = scroll.scrollHeight;
+
+          const entry = {
+            id: 'entry-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+            author: speaker,
+            body: text,
+            kind: kind || 'chat',
+            at: Date.now(),
+          };
+          notifyChatListeners(entry);
+          return entry;
+        }
+
+        function paintSeatCard(el, profile, roleLabel) {
+          if (!el) return;
+          if (!profile) {
+            el.classList.add('is-empty');
+            return;
+          }
+          el.classList.remove('is-empty');
+          el.dataset.profileId = profile.id;
+          const avatar = el.querySelector('.fov-seat-mini');
+          const nameEl = el.querySelector('.fov-seat-name');
+          const hpEl = el.querySelector('.fov-seat-hp');
+          if (avatar) {
+            avatar.textContent = String(profile.name || '?').slice(0, 1).toUpperCase();
+            if (profile.color) {
+              avatar.style.background =
+                'color-mix(in srgb, ' + profile.color + ' 40%, #1a1410)';
+            }
+          }
+          if (nameEl) nameEl.textContent = profile.name || profile.id;
+          if (hpEl) {
+            const hp = profile.hp == null ? '—' : profile.hp;
+            const maxHp = profile.maxHp == null ? '—' : profile.maxHp;
+            hpEl.textContent = roleLabel + ' · HP ' + hp + ' / ' + maxHp;
+          }
+        }
 
         function paintSeats() {
           const seatMap = engine.refreshSeatMap();
-          const absolute = store.state.absoluteTokenPositions;
           const profiles = store.state.profiles;
+          const bottomId = seatMap.seats.bottom;
+          const leftId = seatMap.seats.left;
+          const rightId = seatMap.seats.right;
 
-          Object.keys(seatEls).forEach(function clearSeat(seat) {
-            const el = seatEls[seat];
-            el.classList.add('is-empty');
-            el.dataset.profileId = '';
-            const nameEl = el.querySelector('.fov-seat-name');
-            const hpEl = el.querySelector('.fov-seat-hp');
-            if (nameEl) nameEl.textContent = seat === 'bottom' ? 'You' : seat + ' seat';
-            if (hpEl) hpEl.textContent = 'awaiting link…';
-            el.style.left = engineApi.SEAT_ANCHORS[seat].x + '%';
-            el.style.top = engineApi.SEAT_ANCHORS[seat].y + '%';
-          });
+          const local = bottomId ? profiles[bottomId] : null;
+          youLabel.textContent = local ? local.name : '—';
+          seatSummary.textContent = [
+            'self:' + (local ? local.name : '—'),
+            'left:' + (leftId && profiles[leftId] ? profiles[leftId].name : '—'),
+            'right:' + (rightId && profiles[rightId] ? profiles[rightId].name : '—'),
+          ].join(' · ');
 
-          Object.keys(seatMap.byProfileId).forEach(function place(profileId) {
-            const seat = seatMap.byProfileId[profileId];
-            const el = seatEls[seat];
-            if (!el) return;
-            const profile = profiles[profileId] || {};
-            const local = engine.resolveLocalTokenPosition(profileId, absolute);
-            el.classList.remove('is-empty');
-            el.dataset.profileId = profileId;
-            const nameEl = el.querySelector('.fov-seat-name');
-            const hpEl = el.querySelector('.fov-seat-hp');
-            if (nameEl) {
-              nameEl.textContent =
-                seat === 'bottom' ? profile.name || 'You' : profile.name || profileId;
-            }
-            if (hpEl) {
-              const hp = profile.hp == null ? '—' : profile.hp;
-              const maxHp = profile.maxHp == null ? '—' : profile.maxHp;
-              hpEl.textContent = 'HP ' + hp + ' / ' + maxHp;
-            }
-            engine.tokenLerp.attach(profileId, el);
-            engine.tokenLerp.setImmediate(profileId, local);
-          });
+          if (local) {
+            handsName.textContent = local.name;
+            handsHint.textContent =
+              'HP ' +
+              (local.hp == null ? '—' : local.hp) +
+              ' / ' +
+              (local.maxHp == null ? '—' : local.maxHp) +
+              ' · dice launch from this rail';
+          }
+
+          paintSeatCard(seatLeft, leftId ? profiles[leftId] : null, 'Left rail');
+          paintSeatCard(seatRight, rightId ? profiles[rightId] : null, 'Right rail');
+          paintSeatCard(seatBottom, local, 'Bottom rail');
+
+          /* Left/right stay CSS-pinned to the table corners; do not override with mid-table anchors. */
+          seatLeft.style.left = '';
+          seatLeft.style.top = '';
+          seatRight.style.left = '';
+          seatRight.style.top = '';
         }
 
         function resizeCanvas() {
@@ -200,7 +318,7 @@
           ctx.fillStyle = 'rgba(180, 83, 9, 0.92)';
           ctx.fill();
           ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 1.5;
           ctx.stroke();
           ctx.rotate(-rot);
           ctx.fillStyle = '#fdf6e3';
@@ -223,66 +341,163 @@
           ctx.globalAlpha = 1;
         }
 
-        function appendScroll(speaker, text) {
-          const line = document.createElement('p');
-          line.className = 'fov-scroll-line';
-          line.innerHTML = '<strong>' + speaker + '</strong> — ' + text;
-          scroll.appendChild(line);
-          scroll.scrollTop = scroll.scrollHeight;
+        function clearActiveDie() {
+          if (activeDie && activeDie.parentNode) {
+            activeDie.parentNode.removeChild(activeDie);
+          }
+          activeDie = null;
+        }
+
+        /**
+         * DOM d20 mesh: launches from the screen-space hands dock, projects into
+         * the perspective table plane, tumbles forward across the flat ledger,
+         * and settles in the dice rest zone immediately in front of the Arbiter.
+         */
+        function launchDieMeshTowardArbiter(result, sides, originBtn) {
+          const token = ++throwToken;
+          clearActiveDie();
+
+          const startEl = originBtn || document.getElementById('fov-roll-d20') || document.getElementById('fov-hands');
+          const planeRect = plane.getBoundingClientRect();
+          const startRect = startEl.getBoundingClientRect();
+          const restRect = diceRest.getBoundingClientRect();
+
+          const startX = startRect.left + startRect.width / 2 - planeRect.left;
+          const startY = startRect.top + startRect.height / 2 - planeRect.top;
+          const endX = restRect.left + restRect.width / 2 - planeRect.left;
+          const endY = restRect.top + restRect.height / 2 - planeRect.top;
+
+          const vectors = engineApi.getLocalDiceThrowVectors({
+            fromSeat: 'bottom',
+            toward: 'arbiter',
+          });
+
+          const die = document.createElement('div');
+          die.className = 'fov-die-mesh';
+          die.setAttribute('aria-hidden', 'true');
+          die.textContent = String(result);
+          die.style.left = startX + 'px';
+          die.style.top = startY + 'px';
+          plane.appendChild(die);
+          activeDie = die;
+
+          const dx = endX - startX;
+          const dy = endY - startY;
+          const midX = startX + dx * 0.45 + vectors.driftX * 0.08;
+          const midY = startY + dy * 0.45 - Math.abs(dy) * 0.12;
+          const duration = 1100;
+          const started = performance.now();
+
+          throwReadout.textContent = 'Throwing d' + sides + '…';
+          arbiterStatus.textContent = 'Die in flight across the ledger…';
+
+          function frame(now) {
+            if (token !== throwToken) return;
+            const t = Math.min(1, (now - started) / duration);
+            const ease = engineApi.easeOutCubic(t);
+            const omt = 1 - ease;
+            const x = omt * omt * startX + 2 * omt * ease * midX + ease * ease * endX;
+            const y = omt * omt * startY + 2 * omt * ease * midY + ease * ease * endY;
+            const spin = ease * (vectors.spinY || 720);
+            const scale = 1 + Math.sin(ease * Math.PI) * 0.35;
+
+            die.style.left = x + 'px';
+            die.style.top = y + 'px';
+            die.style.transform =
+              'translate(-50%, -50%) rotateX(' +
+              spin * 0.6 +
+              'deg) rotateY(' +
+              spin +
+              'deg) scale(' +
+              scale +
+              ')';
+
+            if (t < 1) {
+              requestAnimationFrame(frame);
+              return;
+            }
+
+            die.classList.add('is-settled');
+            die.style.transform = 'translate(-50%, -50%) rotateX(18deg) rotateY(-12deg) scale(1)';
+            throwReadout.textContent = 'd' + sides + ' → ' + result + ' · settled at the Arbiter';
+            arbiterStatus.textContent = 'Last throw: ' + result + ' on d' + sides;
+            arbiterLine.textContent =
+              result === sides
+                ? 'The Arbiter smiles. Reality fractures on a natural ' + sides + '.'
+                : 'The die settles before the Arbiter.';
+          }
+
+          requestAnimationFrame(frame);
         }
 
         /**
          * Simulate a network roll packet: only seed + final integer travel.
-         * Each device builds its own launch vector from the roller seat.
+         * Each device builds its own launch vector from the roller seat (bottom dock).
          */
-        function broadcastRoll(rollerId, total) {
+        function broadcastRoll(rollerId, total, sides, originBtn) {
+          const expression = '1d' + sides;
           const packet = engine.buildRollBroadcast({
             rollerId: rollerId,
-            expression: '1d20',
+            expression: expression,
             total: total,
             seed: Date.now(),
           });
-          const rect = plane.getBoundingClientRect();
           engine.handleRollBroadcast(packet, {
             width: window.innerWidth,
             height: window.innerHeight,
-            table: rect,
+            fromDock: true,
           });
+          const profile = store.state.profiles[rollerId];
           appendScroll(
-            store.state.profiles[rollerId] ? store.state.profiles[rollerId].name : rollerId,
-            'rolled 1d20 → ' + total + ' (seed ' + packet.seed + ')'
+            profile ? profile.name : rollerId,
+            'rolled ' + expression + ' → ' + total,
+            'roll'
           );
-          const arbiter = document.getElementById('fov-arbiter-line');
-          if (arbiter) {
-            arbiter.textContent =
-              total === 20
-                ? 'The Arbiter smiles. Reality fractures on a twenty.'
-                : 'The die settles before the Arbiter.';
-          }
+          launchDieMeshTowardArbiter(total, sides, originBtn);
         }
 
-        rollBtn.addEventListener('click', function onRoll() {
-          const activeId = store.state.activeProfileId;
-          const total = 1 + Math.floor(Math.random() * 20);
-          broadcastRoll(activeId, total);
+        const engine = engineApi.createEngine({
+          onFrame: function onFrame(frame) {
+            drawDice(frame.diceParticles);
+          },
         });
 
-        // Demo: peer packets arrive as absolute coords; local lerp glides them over 150ms.
-        window.setInterval(function peerDrift() {
-          const activeId = store.state.activeProfileId;
-          const peers = store.state.players.filter(function notSelf(p) {
-            return String(p.id) !== String(activeId);
+        function handleChatSubmit(event) {
+          event.preventDefault();
+          const text = (chatInput.value || '').trim();
+          if (!text) return;
+          const localId = store.state.activeProfileId;
+          const author =
+            (store.state.profiles[localId] && store.state.profiles[localId].name) || 'You';
+          appendScroll(author, text, 'chat');
+          chatInput.value = '';
+          ledgerLive.textContent = 'Message sealed';
+          window.setTimeout(function resetLive() {
+            ledgerLive.textContent = 'Listening';
+          }, 900);
+        }
+
+        chatForm.addEventListener('submit', handleChatSubmit);
+        chatInput.addEventListener('keydown', function onChatKeydown(event) {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            ledgerLive.textContent = 'Composing…';
+          }
+        });
+        chatInput.addEventListener('input', function onChatInput() {
+          if (chatInput.value.trim()) {
+            ledgerLive.textContent = 'Typing…';
+          } else {
+            ledgerLive.textContent = 'Listening';
+          }
+        });
+
+        document.querySelectorAll('.fov-roll-btn').forEach(function bindDie(btn) {
+          btn.addEventListener('click', function onRollClick(event) {
+            const sides = Number(btn.getAttribute('data-sides')) || 20;
+            const total = 1 + Math.floor(Math.random() * sides);
+            broadcastRoll(store.state.activeProfileId, total, sides, event.currentTarget);
           });
-          if (!peers.length) return;
-          const peer = peers[Math.floor(Math.random() * peers.length)];
-          const current = store.state.absoluteTokenPositions[peer.id] || { x: 50, y: 45 };
-          const next = {
-            x: Math.min(90, Math.max(10, current.x + (Math.random() - 0.5) * 10)),
-            y: Math.min(70, Math.max(20, current.y + (Math.random() - 0.5) * 8)),
-          };
-          store.setAbsoluteTokenPosition(peer.id, next);
-          engine.ingestPeerPosition(peer.id, next);
-        }, 2400);
+        });
 
         store.subscribe(function onStore() {
           paintSeats();
@@ -293,7 +508,12 @@
         paintSeats();
         engine.ingestAbsolutePositions(store.state.absoluteTokenPositions);
         engine.start();
-        appendScroll('Table', 'Active profile locked to bottom seat: ' + activeId);
+        appendScroll('Table', 'Perspective stage locked · ledger rests on the table plane.', 'system');
+        appendScroll(
+          'Table',
+          'Edward holds the left rail. Jamie holds the right. Your hands grip the near edge.',
+          'system'
+        );
       })();
     </script>
   </body>
