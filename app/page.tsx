@@ -94,24 +94,24 @@ function CrystalHud({
 }) {
   const sealDisplay = lastSeal ? sealToRunes(lastSeal.slice(0, 4)) || lastSeal.slice(0, 4) : '—';
   return (
-    <div className="celestial-hud-row" role="status" aria-label="Cosmic state headers">
-      <div className="crystal-shard">
+    <div className="celestial-hud-row" role="status" aria-label="Cosmic state headers" data-node-id="1:52">
+      <div className="crystal-shard" data-node-id="1:53">
         <span className="crystal-shard__label">Vaults</span>
         <span className="crystal-shard__value">{vaultCount}</span>
       </div>
-      <div className="crystal-shard">
+      <div className="crystal-shard" data-node-id="1:56">
         <span className="crystal-shard__label">Seats</span>
         <span className="crystal-shard__value">{seatCount}</span>
       </div>
-      <div className="crystal-shard">
+      <div className="crystal-shard" data-node-id="1:59">
         <span className="crystal-shard__label">Seal</span>
-        <span className="crystal-shard__value" style={{ fontSize: '0.95rem' }}>
+        <span className="crystal-shard__value" style={{ fontSize: sealDisplay.length > 3 ? '0.85rem' : '20px' }}>
           {sealDisplay}
         </span>
       </div>
-      <div className="crystal-shard">
+      <div className="crystal-shard" data-node-id="1:62">
         <span className="crystal-shard__label">Heat</span>
-        <span className="crystal-shard__value" style={{ fontSize: '0.85rem' }}>
+        <span className="crystal-shard__value" style={{ fontSize: heat.length > 5 ? '0.85rem' : '20px' }}>
           {heat}
         </span>
       </div>
@@ -271,6 +271,7 @@ export default function HomeDashboard() {
         id="cosmic-reverberation-root"
       >
         <div className="celestial-nebula" aria-hidden />
+        <div className="celestial-figma-starfield" aria-hidden data-node-id="1:3" />
         <CelestialStarfield />
 
         <div className="relative z-10 flex flex-col items-center justify-start sm:justify-center h-full min-h-full overflow-y-auto p-4 pt-8 pb-10">
@@ -281,10 +282,14 @@ export default function HomeDashboard() {
             heat={hud.heat}
           />
 
-          <header className="text-center mb-6 space-y-2 relative z-10">
-            <p className="celestial-section-title">Voidline Galaxy Farm</p>
-            <h1 className="celestial-brand">Voidline</h1>
-            <p className="celestial-tagline">
+          <header className="text-center mb-6 space-y-2 relative z-10" data-node-id="1:65">
+            <p className="celestial-section-title" data-node-id="1:66">
+              Voidline Galaxy Farm
+            </p>
+            <h1 className="celestial-brand" data-node-id="1:67">
+              Voidline
+            </h1>
+            <p className="celestial-tagline" data-node-id="1:68">
               {mode === 'home'
                 ? 'Aden · Edward · Jamie — where the Arbiter waits beyond the veil.'
                 : 'Three doors into deep space. Choose which cosmos burns first.'}
@@ -295,6 +300,7 @@ export default function HomeDashboard() {
             <div
               className={`celestial-obsidian-card${fragmenting ? ' is-fragmenting' : ''}`}
               aria-hidden={showTracker}
+              data-node-id="1:70"
             >
               <div className="celestial-fragment-left space-y-4">
                 {vault.length > 0 && (

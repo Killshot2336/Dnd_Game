@@ -3,6 +3,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 :root {
+  /* Figma: Celestial Gate / Desktop (file auTIMnhMXFFYu9jmyfSjr7, node 1:2) */
   --cosmic-obsidian: rgba(4, 5, 15, 0.93);
   --supernova-gold: #fbbf24;
   --cosmic-cyan: #06b6d4;
@@ -10,7 +11,16 @@
   --cosmic-ink: #02030a;
   --shard-violet: #a78bfa;
   --shard-ember: #fb7185;
+  --cosmic-mist: #bae5fc;
+  --cosmic-label: #e8e5f0;
   --cosmic-shake-amp: 1;
+  --figma-gate-gap: 24px;
+  --figma-card-width: 448px;
+  --figma-card-pad-y: 28px;
+  --figma-card-pad-x: 24px;
+  --figma-card-gap: 16px;
+  --figma-brand-size: clamp(2.75rem, 7vw, 3.5rem);
+  --figma-brand-tracking: 0.12em;
 }
 
 /* —— Pillar 2: Shake matrix + chromatic fracture —— */
@@ -104,12 +114,13 @@
   min-height: var(--app-height, 100dvh);
   height: var(--app-height, 100dvh);
   overflow: hidden;
+  /* Figma radial nebulae: cyan @ left, gold @ right on #02030a */
   background:
-    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(6, 182, 212, 0.18), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 80% 90%, rgba(251, 191, 36, 0.12), transparent 50%),
+    radial-gradient(ellipse 55% 45% at 0% 70%, rgba(5, 115, 140, 0.35), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 85% 15%, rgba(250, 191, 36, 0.18), transparent 55%),
     radial-gradient(ellipse 50% 40% at 10% 70%, rgba(167, 139, 250, 0.1), transparent 45%),
     linear-gradient(180deg, #02030a 0%, #04050f 40%, #0a0618 100%);
-  color: #e8e6f0;
+  color: var(--cosmic-label);
   perspective: 1400px;
 }
 
@@ -122,6 +133,17 @@
   animation: celestial-nebula-drift 28s ease-in-out infinite alternate;
   pointer-events: none;
   z-index: 0;
+}
+
+/* Figma Starfield Layer export (node 1:3) */
+.celestial-figma-starfield {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: url('/celestial/starfield-layer.svg') center / cover no-repeat;
+  opacity: 0.85;
+  mix-blend-mode: screen;
 }
 
 @keyframes celestial-nebula-drift {
@@ -137,7 +159,7 @@
 .celestial-starfield {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
   overflow: hidden;
 }
@@ -170,21 +192,24 @@
   }
 }
 
-/* —— Pillar 1: Cosmic obsidian card + animated perimeter —— */
+/* —— Pillar 1: Cosmic obsidian card + animated perimeter (Figma 1:69–1:70) —— */
 .celestial-obsidian-card {
   position: relative;
   z-index: 5;
+  width: min(100%, var(--figma-card-width));
+  max-width: var(--figma-card-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding: var(--figma-card-pad-y) var(--figma-card-pad-x);
+  display: flex;
+  flex-direction: column;
+  gap: var(--figma-card-gap);
   background: var(--cosmic-obsidian);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
-  border-radius: 2px;
-  padding: 1.75rem 1.5rem;
-  max-width: 28rem;
-  width: 100%;
-  margin-left: auto;
-  margin-right: auto;
+  border-radius: 1px;
   box-shadow:
-    0 0 0 1px rgba(6, 182, 212, 0.15),
+    0 0 28px rgba(6, 182, 212, 0.25),
     0 24px 80px rgba(0, 0, 0, 0.65),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
   transform-style: preserve-3d;
@@ -197,17 +222,17 @@
   content: '';
   position: absolute;
   inset: -2px;
-  border-radius: inherit;
+  border-radius: 2px;
   padding: 2px;
-  background: linear-gradient(
-    120deg,
+  /* Figma angular/conic gold↔cyan perimeter */
+  background: conic-gradient(
+    from 90deg,
     var(--supernova-gold),
     var(--cosmic-cyan),
     var(--supernova-gold),
     var(--cosmic-cyan),
     var(--supernova-gold)
   );
-  background-size: 300% 300%;
   animation: celestial-border-morph 6s linear infinite;
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -223,13 +248,10 @@
 
 @keyframes celestial-border-morph {
   0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
+    filter: hue-rotate(0deg);
   }
   100% {
-    background-position: 0% 50%;
+    filter: hue-rotate(360deg);
   }
 }
 
@@ -297,66 +319,80 @@
   }
 }
 
-/* —— Pillar 3: Crystal shard HUD —— */
+/* —— Pillar 3: Crystal shard HUD (Figma nodes 1:52–1:64) —— */
 .celestial-hud-row {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1.25rem;
+  gap: 16px;
+  margin-bottom: var(--figma-gate-gap);
   position: relative;
   z-index: 6;
 }
 
 .crystal-shard {
   --glow-color: var(--supernova-gold);
+  --shard-border: rgba(251, 191, 36, 0.45);
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 4.5rem;
-  padding: 0.55rem 0.85rem 0.65rem;
-  clip-path: polygon(50% 0%, 95% 22%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 5% 22%);
+  gap: 4px;
+  min-width: 4.75rem;
+  padding: 12px 18px 14px;
+  border-radius: 2px;
+  border: 1px solid var(--shard-border);
   background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.18) 0%,
-    rgba(6, 182, 212, 0.22) 40%,
-    rgba(4, 5, 15, 0.85) 100%
+    147deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    color-mix(in srgb, var(--glow-color) 28%, transparent) 32%,
+    rgba(4, 5, 15, 0.92) 71%
   );
-  border: none;
-  box-shadow:
-    0 0 18px rgba(6, 182, 212, 0.35),
-    inset 0 0 12px rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--glow-color) 45%, transparent);
   animation: crystal-shard-bob 4s ease-in-out infinite;
-  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+
+.crystal-shard:nth-child(1) {
+  --glow-color: var(--supernova-gold);
+  --shard-border: rgba(251, 191, 36, 0.45);
 }
 
 .crystal-shard:nth-child(2) {
   --glow-color: var(--cosmic-cyan);
+  --shard-border: rgba(6, 182, 212, 0.45);
   animation-delay: -1.2s;
   background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.16) 0%,
-    rgba(251, 191, 36, 0.2) 45%,
-    rgba(4, 5, 15, 0.85) 100%
+    144deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(6, 182, 212, 0.28) 32%,
+    rgba(4, 5, 15, 0.92) 71%
   );
 }
 
 .crystal-shard:nth-child(3) {
-  --glow-color: #fb7185;
+  --glow-color: #fb7285;
+  --shard-border: rgba(251, 114, 133, 0.45);
   animation-delay: -2.4s;
   background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.14) 0%,
-    rgba(167, 139, 250, 0.28) 45%,
-    rgba(4, 5, 15, 0.85) 100%
+    142deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(251, 114, 133, 0.28) 32%,
+    rgba(4, 5, 15, 0.92) 71%
   );
 }
 
 .crystal-shard:nth-child(4) {
   --glow-color: #a78bfa;
+  --shard-border: rgba(167, 139, 250, 0.45);
   animation-delay: -0.6s;
+  background: linear-gradient(
+    153deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(167, 139, 250, 0.28) 32%,
+    rgba(4, 5, 15, 0.92) 71%
+  );
 }
 
 @keyframes crystal-shard-bob {
@@ -371,68 +407,68 @@
 
 .crystal-shard__label {
   font-family: 'Cinzel', Georgia, serif;
-  font-size: 0.55rem;
-  letter-spacing: 0.18em;
+  font-size: 9px;
+  letter-spacing: 2.2px;
   text-transform: uppercase;
-  color: rgba(232, 230, 240, 0.65);
-  margin-bottom: 0.15rem;
+  color: var(--cosmic-label);
+  line-height: 1.2;
 }
 
 .crystal-shard__value {
   font-family: 'Cinzel', Georgia, serif;
-  font-size: 1.15rem;
+  font-size: 20px;
   font-weight: 700;
   color: #fff;
-  text-shadow: 0 0 15px var(--glow-color);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--glow-color) 90%, transparent);
   line-height: 1;
 }
 
 .celestial-brand {
   font-family: 'Cinzel', Georgia, serif;
-  font-size: clamp(2rem, 6vw, 3.25rem);
+  font-size: var(--figma-brand-size);
   font-weight: 900;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--figma-brand-tracking);
   text-transform: uppercase;
-  background: linear-gradient(100deg, var(--supernova-gold), #fff 40%, var(--cosmic-cyan) 90%);
+  background: linear-gradient(90deg, var(--supernova-gold), #fff 40%, var(--cosmic-cyan));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: none;
-  filter: drop-shadow(0 0 22px rgba(251, 191, 36, 0.45));
+  filter: drop-shadow(0 0 22px rgba(251, 191, 36, 0.5));
   margin: 0;
 }
 
 .celestial-tagline {
   font-family: 'IM Fell English', Georgia, serif;
   font-style: italic;
-  font-size: 0.95rem;
-  color: rgba(186, 230, 253, 0.75);
+  font-size: 16px;
+  color: var(--cosmic-mist);
   margin-top: 0.5rem;
 }
 
 .celestial-section-title {
   font-family: 'Cinzel', Georgia, serif;
-  font-size: 0.7rem;
-  letter-spacing: 0.22em;
+  font-size: 11px;
+  letter-spacing: 3.5px;
   text-transform: uppercase;
   color: var(--cosmic-cyan);
-  text-shadow: 0 0 12px rgba(6, 182, 212, 0.55);
+  text-shadow: 0 0 10px rgba(6, 182, 212, 0.55);
 }
 
 .celestial-cta {
   width: 100%;
   font-family: 'Cinzel', Georgia, serif;
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2.8px;
   text-transform: uppercase;
-  padding: 1rem 1.25rem;
+  padding: 16px 20px;
   color: #04050f;
-  background: linear-gradient(135deg, var(--supernova-gold), #f59e0b 50%, var(--cosmic-cyan));
+  background: linear-gradient(90deg, var(--supernova-gold), #f59e0b 50%, var(--cosmic-cyan));
   background-size: 200% 200%;
   border: none;
   cursor: pointer;
   animation: celestial-cta-shimmer 4s linear infinite;
-  box-shadow: 0 0 28px rgba(251, 191, 36, 0.4);
+  box-shadow: 0 0 28px rgba(251, 191, 36, 0.45);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -517,10 +553,11 @@
 .six-glyph-seal__rune {
   --glow-color: var(--supernova-gold);
   color: var(--supernova-gold);
+  font-size: 24px;
+  font-weight: 700;
   text-shadow:
-    0 0 8px var(--glow-color),
-    0 0 18px var(--glow-color),
-    0 0 32px rgba(251, 191, 36, 0.65);
+    0 0 14px rgba(251, 191, 36, 0.95),
+    0 0 28px rgba(6, 182, 212, 0.45);
   animation: rune-neon-pulse 1.6s ease-in-out infinite;
   min-width: 1.1em;
   text-align: center;
