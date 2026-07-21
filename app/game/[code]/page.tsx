@@ -1968,6 +1968,11 @@ function GameRoom({ params }: { params: { code: string } }) {
 
   const activeName = currentPlayer?.user_name ?? '';
   const activeHp = safeHp(currentPlayer);
+  const coopPeers = players.filter(
+    (player) => player.user_name !== activeName
+  );
+  const coopLeft = coopPeers[0] ?? null;
+  const coopRight = coopPeers[1] ?? null;
   const narrative =
     game?.current_narrative ?? 'The dynamic void initializes. Welcome, degenerates.';
   const selfPortrait = portraitForPlayer(
@@ -2383,62 +2388,108 @@ function GameRoom({ params }: { params: { code: string } }) {
           <MomentsStrip highlights={arbiterMemory.highlights} />
         </section>
 
-        {/* Physical action dock — screen-space bottom center (hands at the rail) */}
-        <form
-          className={`action-dock quill-well ${
-            vaultRoom.pendingChecks.length ? 'action-dock--lit' : ''
-          }`}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleExecuteAction();
-          }}
-          aria-label="Dice and quill at the table edge"
-        >
-          <div className={`dice-tray ${vaultRoom.pendingChecks.length ? 'dice-tray-lit' : ''}`}>
-            {['1d20', '1d20+5', '2d6', '1d8'].map((expr) => (
-              <button
-                key={expr}
-                type="button"
-                onClick={() => handleQuickRoll(expr)}
-                className="bone-die"
-                title={`Roll ${expr}`}
-              >
-                {expr.replace('1d', 'd')}
-              </button>
-            ))}
-          </div>
-          <textarea
-            value={inputMessage}
-            onChange={(event) => setInputMessage(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                void handleExecuteAction();
-              }
+        {/* Physical wood-rim action hub — screen-space bottom (outside perspective warp) */}
+        <div className="action-hub" aria-label="Table edge controls">
+          <article
+            className={`coop-chip coop-chip--left ${coopLeft ? '' : 'is-empty'}`}
+            aria-label={coopLeft ? `${coopLeft.user_name} status` : 'Left co-op seat empty'}
+          >
+            <div className="coop-chip-avatar">
+              {(coopLeft?.user_name || '?').slice(0, 1).toUpperCase()}
+            </div>
+            <div className="coop-chip-meta">
+              <p className="coop-chip-name">{coopLeft?.user_name || 'Open seat'}</p>
+              <p className="coop-chip-track">
+                {coopLeft
+                  ? `HP ${coopLeft.current_hp ?? '—'} · ${
+                      tableMeta.spotlight?.toLowerCase() ===
+                      coopLeft.user_name.toLowerCase()
+                        ? 'lantern'
+                        : 'ready'
+                    }`
+                  : 'awaiting link'}
+              </p>
+            </div>
+          </article>
+
+          <form
+            className={`action-dock quill-well ${
+              vaultRoom.pendingChecks.length ? 'action-dock--lit' : ''
+            }`}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleExecuteAction();
             }}
-            rows={2}
-            placeholder="Deed, /roll, or /gm ask your buddy…"
-            className="quill-input w-full text-[16px] px-1 py-2 max-h-[28vh]"
-            disabled={isGMLoading}
-          />
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[12px] italic text-[#cbb896]">
-              /gm for side help · Enter seals the ink
-            </p>
-            <button
-              type="submit"
-              disabled={!inputMessage.trim() || isGMLoading}
-              className={`wax-button px-5 py-2 text-[11px] ${stampPulse ? 'v3-stamp-pulse' : ''}`}
-              onClick={() => {
-                setStampPulse(true);
-                playWaxStamp();
-                window.setTimeout(() => setStampPulse(false), 400);
+            aria-label="Dice and quill carved into the wood rim"
+          >
+            <div className={`dice-tray ${vaultRoom.pendingChecks.length ? 'dice-tray-lit' : ''}`}>
+              {['1d20', '1d20+5', '2d6', '1d8'].map((expr) => (
+                <button
+                  key={expr}
+                  type="button"
+                  onClick={() => handleQuickRoll(expr)}
+                  className="bone-die"
+                  title={`Roll ${expr}`}
+                >
+                  {expr.replace('1d', 'd')}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={inputMessage}
+              onChange={(event) => setInputMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void handleExecuteAction();
+                }
               }}
-            >
-              {isGMLoading ? '…' : 'Seal'}
-            </button>
-          </div>
-        </form>
+              rows={2}
+              placeholder="Deed, /roll, or /gm ask your buddy…"
+              className="quill-input w-full text-[16px] px-1 py-2 max-h-[28vh]"
+              disabled={isGMLoading}
+            />
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[12px] italic text-[#cbb896]">
+                /gm for side help · Enter seals the ink
+              </p>
+              <button
+                type="submit"
+                disabled={!inputMessage.trim() || isGMLoading}
+                className={`wax-button px-5 py-2 text-[11px] ${stampPulse ? 'v3-stamp-pulse' : ''}`}
+                onClick={() => {
+                  setStampPulse(true);
+                  playWaxStamp();
+                  window.setTimeout(() => setStampPulse(false), 400);
+                }}
+              >
+                {isGMLoading ? '…' : 'Seal'}
+              </button>
+            </div>
+          </form>
+
+          <article
+            className={`coop-chip coop-chip--right ${coopRight ? '' : 'is-empty'}`}
+            aria-label={coopRight ? `${coopRight.user_name} status` : 'Right co-op seat empty'}
+          >
+            <div className="coop-chip-avatar">
+              {(coopRight?.user_name || '?').slice(0, 1).toUpperCase()}
+            </div>
+            <div className="coop-chip-meta">
+              <p className="coop-chip-name">{coopRight?.user_name || 'Open seat'}</p>
+              <p className="coop-chip-track">
+                {coopRight
+                  ? `HP ${coopRight.current_hp ?? '—'} · ${
+                      tableMeta.spotlight?.toLowerCase() ===
+                      coopRight.user_name.toLowerCase()
+                        ? 'lantern'
+                        : 'ready'
+                    }`
+                  : 'awaiting link'}
+              </p>
+            </div>
+          </article>
+        </div>
       </div>
 
       {/* Leather satchel / character sheet */}

@@ -1,224 +1,525 @@
-/* Localized FOV table perspective — independent per device */
+/* Immersive first-person table — crisp ledger on felt, wood-rim action hub */
 :root {
   --fov-perspective: 900px;
-  --fov-tilt: 22deg;
-  --fov-scale: 1.12;
-  --fov-origin-y: 78%;
+  --fov-tilt: 25deg;
+  --fov-scale: 1.08;
+  --fov-origin-y: 92%;
+  --fov-wood: #3a2416;
+  --fov-wood-rim: #1a120c;
+  --fov-wood-deep: #0e0a06;
+  --fov-brass: #b8965c;
+  --fov-ink: #f0e2c4;
+  --fov-ember: #f59e0b;
+  --fov-paper: #f4ecd6;
 }
 
 html,
 body {
   margin: 0;
   min-height: 100%;
-  background: #120c08;
-  color: #f0e2c4;
+  height: 100%;
+  background: #0a0604;
+  color: var(--fov-ink);
   font-family: 'IM Fell English', Georgia, serif;
+  overflow: hidden;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .fov-root {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(40, 24, 12, 0.55), transparent 55%),
-    #0a0604;
+  background: #0a0604;
 }
 
-.fov-horizon {
+.fov-topbar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 22%;
+  z-index: 30;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 4;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.55rem 0.85rem;
   pointer-events: none;
+  background: linear-gradient(180deg, rgba(8, 4, 2, 0.82) 0%, transparent 100%);
 }
 
-.fov-arbiter {
-  width: min(280px, 46vw);
-  padding: 0.75rem 1rem;
-  text-align: center;
-  background: linear-gradient(180deg, #2a1810, #1a100c);
-  border: 2px solid #6b4423;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
-}
-
-.fov-arbiter h1 {
+.fov-brand {
   margin: 0;
   font-family: Cinzel, Georgia, serif;
-  font-size: 0.95rem;
-  letter-spacing: 0.14em;
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #f59e0b;
+  color: var(--fov-ember);
 }
 
-.fov-arbiter p {
-  margin: 0.35rem 0 0;
-  font-style: italic;
-  font-size: 0.8rem;
-  color: #d6c4a1;
+.fov-topbar h1 {
+  margin: 0.15rem 0 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: clamp(0.7rem, 1.5vw, 0.9rem);
+  color: var(--fov-ink);
 }
 
+.fov-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.9rem;
+  font-size: 0.68rem;
+  color: #cbb896;
+}
+
+.fov-meta strong {
+  color: var(--fov-ink);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-weight: 500;
+}
+
+/* Full-viewport 3D stage — no bottom split, no fade veil */
 .fov-table-stage {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 14%;
-  bottom: 22%;
+  inset: 0;
   perspective: var(--fov-perspective);
   perspective-origin: 50% var(--fov-origin-y);
   z-index: 3;
+  overflow: hidden;
 }
 
 .fov-table-plane {
   position: absolute;
-  inset: 4% 8% 0;
+  left: 1.5%;
+  right: 1.5%;
+  top: -5%;
+  bottom: 4.75rem;
   transform: perspective(var(--fov-perspective)) rotateX(var(--fov-tilt)) scale(var(--fov-scale));
   transform-origin: 50% 100%;
   transform-style: preserve-3d;
   background:
-    linear-gradient(180deg, rgba(20, 12, 8, 0.35), rgba(10, 6, 4, 0.7)),
-    #3a2416;
-  border: 6px solid #2a1810;
+    linear-gradient(180deg, rgba(28, 16, 10, 0.2) 0%, rgba(12, 8, 4, 0.35) 100%),
+    repeating-linear-gradient(
+      92deg,
+      rgba(255, 210, 140, 0.03) 0 2px,
+      transparent 2px 7px
+    ),
+    var(--fov-wood);
+  border: 7px solid #2a1810;
   outline: 1px solid #6b4423;
   box-shadow:
-    inset 0 0 90px rgba(0, 0, 0, 0.55),
-    0 30px 60px rgba(0, 0, 0, 0.65);
+    inset 0 0 90px rgba(0, 0, 0, 0.5),
+    0 36px 70px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.1rem 1.25rem;
+  box-sizing: border-box;
 }
 
 .fov-table-mesh {
   position: absolute;
-  inset: 8%;
-  border: 1px dashed rgba(107, 68, 35, 0.45);
+  inset: 5% 4% 10%;
+  border: 1px dashed rgba(107, 68, 35, 0.3);
   background-image:
-    linear-gradient(rgba(107, 68, 35, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(107, 68, 35, 0.12) 1px, transparent 1px);
-  background-size: 12% 12%;
+    linear-gradient(rgba(107, 68, 35, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(107, 68, 35, 0.1) 1px, transparent 1px);
+  background-size: 10% 10%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fov-arbiter {
+  position: relative;
+  z-index: 6;
+  align-self: center;
+  width: min(300px, 54%);
+  margin: 0.25rem auto 0.45rem;
+  padding: 0.65rem 0.9rem 0.75rem;
+  text-align: center;
+  background: linear-gradient(180deg, #2e1c12, #16100c);
+  border: 2px solid #6b4423;
+  box-shadow:
+    0 0 24px rgba(245, 158, 11, 0.16),
+    0 12px 30px rgba(0, 0, 0, 0.5);
+  transform: translateZ(28px);
+}
+
+.fov-arbiter-kicker {
+  margin: 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.52rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fov-brass);
+}
+
+.fov-arbiter h2 {
+  margin: 0.2rem 0 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.88rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fov-ember);
+}
+
+.fov-arbiter-copy {
+  margin: 0.35rem 0 0;
+  font-style: italic;
+  font-size: 0.74rem;
+  color: #d6c4a1;
+  line-height: 1.35;
+}
+
+.fov-arbiter-status {
+  margin-top: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(107, 68, 35, 0.5);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.64rem;
+  color: var(--fov-brass);
+}
+
+.fov-dice-rest {
+  position: relative;
+  z-index: 7;
+  align-self: center;
+  width: 4.25rem;
+  height: 2.2rem;
+  margin: 0 auto 0.4rem;
+  border: 1px dashed rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.05);
+  transform: translateZ(18px);
   pointer-events: none;
 }
 
-.fov-seat-slot {
-  position: absolute;
-  transform: translate(-50%, -50%) translateZ(18px) rotateX(-22deg);
-  transform-style: preserve-3d;
-  min-width: 4.5rem;
-  text-align: center;
-  z-index: 15;
-}
-
-.fov-seat-slot[data-seat='bottom'] {
-  z-index: 25;
-}
-
-.fov-seat-slot.is-empty {
-  opacity: 0.45;
-}
-
-.fov-seat-mini {
-  width: 3.25rem;
-  height: 4rem;
+/* Graph ledger — fully crisp, no bottom fade / blur / mask */
+.fov-ledger {
+  position: relative;
+  z-index: 5;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(92%, 520px);
   margin: 0 auto;
-  background: #1a120c;
-  border: 1px solid #6b4423;
-  border-radius: 40% 40% 18% 18% / 28% 28% 12% 12%;
+  background-color: var(--fov-paper);
+  background-image:
+    linear-gradient(90deg, rgba(90, 55, 25, 0.08) 0 1px, transparent 1px),
+    repeating-linear-gradient(
+      transparent 0,
+      transparent 26px,
+      rgba(90, 55, 25, 0.09) 27px
+    );
+  background-size: 22px 100%, auto;
+  border: 1px solid rgba(107, 68, 35, 0.7);
+  box-shadow:
+    inset 0 0 24px rgba(80, 50, 20, 0.12),
+    0 14px 28px rgba(0, 0, 0, 0.35);
+  color: #2a160e;
+  transform: translateZ(12px);
+  opacity: 1;
+  -webkit-mask-image: none;
+  mask-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  filter: none;
 }
 
-.fov-seat-name {
-  margin-top: 0.25rem;
+.fov-ledger-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid rgba(92, 58, 33, 0.35);
   font-family: Cinzel, Georgia, serif;
-  font-size: 0.7rem;
-  color: #f0e2c4;
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7f1d1d;
+  background: transparent;
 }
 
-.fov-seat-hp {
-  font-size: 0.65rem;
+.fov-ledger-live {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #5c3a21;
+}
+
+.fov-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: #2a160e;
+  background: transparent;
+  -webkit-overflow-scrolling: touch;
+  /* No mask fade on the scroll edge */
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.fov-scroll-line {
+  margin: 0 0 0.45rem;
+  color: #2a160e;
+}
+
+.fov-scroll-line strong {
+  color: #7f1d1d;
+  font-family: Cinzel, Georgia, serif;
+  font-weight: 700;
+}
+
+.fov-scroll-line.is-roll strong {
+  color: #8b4510;
+}
+
+.fov-scroll-line.is-system {
+  color: #5c3a21;
   font-style: italic;
-  color: #b8965c;
 }
 
-.fov-hands {
+/* Wood-rim action hub — outside the 3D warp, carved into the frame */
+.fov-action-hub {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 24%;
-  z-index: 6;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
-  box-sizing: border-box;
-  background: linear-gradient(180deg, transparent, rgba(10, 6, 4, 0.92) 28%);
+  z-index: 40;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.fov-action-hub > * {
+  pointer-events: auto;
+}
+
+.fov-hands {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  padding: 0.5rem 0.7rem calc(0.4rem + env(safe-area-inset-bottom, 0px));
+  background: var(--fov-wood-rim);
+  background-image:
+    linear-gradient(180deg, rgba(42, 28, 18, 0.95), rgba(14, 10, 6, 0.98)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 210, 140, 0.03) 0 1px,
+      transparent 1px 5px
+    );
+  border: none;
+  border-top: 1px solid var(--fov-brass);
+  border-radius: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 230, 180, 0.08);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .fov-hands-dock {
-  width: min(720px, 100%);
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 0.75rem;
-  align-items: end;
+  gap: 0.5rem;
+  align-items: stretch;
 }
 
-.fov-sheet-dock,
-.fov-dice-dock {
-  background: rgba(28, 18, 12, 0.92);
-  border: 1px solid #6b4423;
-  padding: 0.75rem;
+.fov-sheet-dock {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.fov-sheet-dock .fov-seat-name {
+  margin: 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.72rem;
+  color: var(--fov-ink);
+}
+
+.fov-sheet-dock .fov-seat-hp {
+  margin: 0;
+  font-size: 0.62rem;
+  font-style: italic;
+  color: var(--fov-brass);
 }
 
 .fov-dice-dock {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 9rem;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-content: center;
+  justify-content: flex-end;
 }
 
 .fov-roll-btn {
   font-family: Cinzel, Georgia, serif;
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 0.85rem 1rem;
+  padding: 0.55rem 0.65rem;
   color: #1a100c;
-  background: linear-gradient(135deg, #f59e0b, #b8965c);
+  background: linear-gradient(135deg, var(--fov-ember), var(--fov-brass));
   border: none;
   cursor: pointer;
+}
+
+.fov-roll-btn.secondary {
+  background: transparent;
+  color: var(--fov-brass);
+  border: 1px solid rgba(184, 150, 92, 0.55);
 }
 
 .fov-roll-btn:active {
   transform: translateY(1px);
 }
 
-.fov-scroll {
-  position: absolute;
-  right: 0.75rem;
-  top: 24%;
-  bottom: 26%;
-  width: min(280px, 32vw);
-  z-index: 5;
-  padding: 0.85rem;
-  overflow: auto;
-  background: rgba(40, 24, 14, 0.72);
-  border: 1px solid rgba(184, 150, 92, 0.55);
-  box-shadow: 0 0 24px rgba(180, 83, 9, 0.18);
-  backdrop-filter: blur(8px);
-  font-size: 0.8rem;
-  line-height: 1.45;
+.fov-compose {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
 }
 
-.fov-scroll-line {
-  margin: 0 0 0.55rem;
-  color: #e4d0a2;
+.fov-chat-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: 'IM Fell English', Georgia, serif;
+  font-size: 0.9rem;
+  color: var(--fov-ink);
+  background: rgba(10, 6, 4, 0.55);
+  border: 1px solid rgba(107, 68, 35, 0.65);
+  padding: 0.5rem 0.6rem;
+  outline: none;
 }
 
-.fov-scroll-line strong {
-  color: #f59e0b;
+.fov-chat-input:focus {
+  border-color: var(--fov-ember);
+}
+
+.fov-chat-send {
+  flex: 0 0 auto;
   font-family: Cinzel, Georgia, serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.7rem;
+  color: #1a100c;
+  background: linear-gradient(135deg, var(--fov-ember), var(--fov-brass));
+  border: none;
+  cursor: pointer;
+}
+
+.fov-throw-readout {
+  margin: 0.3rem 0 0;
+  grid-column: 1 / -1;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.58rem;
+  color: var(--fov-brass);
+  text-align: center;
+}
+
+/* Co-op chips flanking the wood rim */
+.fov-coop-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 5.25rem;
+  max-width: 8rem;
+  margin-bottom: calc(0.3rem + env(safe-area-inset-bottom, 0px));
+  padding: 0.3rem 0.4rem;
+  background: var(--fov-wood-rim);
+  border: 1px solid rgba(184, 150, 92, 0.4);
+  border-top: 1px solid var(--fov-brass);
+  color: var(--fov-ink);
+}
+
+.fov-coop-chip--left {
+  margin-left: 0.3rem;
+}
+
+.fov-coop-chip--right {
+  margin-right: 0.3rem;
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.fov-coop-chip.is-empty {
+  opacity: 0.4;
+}
+
+.fov-coop-avatar {
+  width: 1.75rem;
+  height: 2.05rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.7rem;
+  background: #2a1810;
+  border: 1px solid #6b4423;
+  border-radius: 40% 40% 18% 18% / 28% 28% 12% 12%;
+}
+
+.fov-coop-name {
+  margin: 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+}
+
+.fov-coop-track {
+  margin: 0.08rem 0 0;
+  font-size: 0.55rem;
+  font-style: italic;
+  color: var(--fov-brass);
+}
+
+.fov-die-mesh {
+  position: absolute;
+  z-index: 15;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.9rem;
   font-weight: 700;
+  color: #1a100c;
+  background: linear-gradient(145deg, #f59e0b, #b45309 55%, #7c2d12);
+  border: 2px solid #fbbf24;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  will-change: left, top, transform;
+}
+
+.fov-die-mesh.is-settled {
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    0 0 16px rgba(245, 158, 11, 0.4);
 }
 
 #fov-dice-canvas {
@@ -226,4 +527,30 @@ body {
   inset: 0;
   z-index: 50;
   pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .fov-table-plane {
+    left: 0;
+    right: 0;
+    bottom: 5.5rem;
+    padding: 0.7rem 0.55rem 1rem;
+  }
+
+  .fov-ledger {
+    width: 96%;
+  }
+
+  .fov-coop-chip {
+    min-width: 2.75rem;
+    max-width: 3.5rem;
+  }
+
+  .fov-coop-chip .fov-coop-meta {
+    display: none;
+  }
+
+  .fov-hands-dock {
+    grid-template-columns: 1fr;
+  }
 }

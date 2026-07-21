@@ -7,73 +7,119 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/css/fov-table.css" />
   </head>
   <body>
     <div class="fov-root" id="fov-root">
-      <canvas id="fov-dice-canvas"></canvas>
-
-      <div class="fov-horizon" id="fov-horizon">
-        <div class="fov-arbiter">
-          <h1>The Arbiter</h1>
-          <p id="fov-arbiter-line">Looking back at you across the wood.</p>
+      <header class="fov-topbar">
+        <div>
+          <p class="fov-brand">VOIDLINE · TABLE RIM</p>
+          <h1>Crisp ledger on the felt · wood action hub at your hands</h1>
         </div>
-      </div>
+        <div class="fov-meta">
+          <span>Room <strong id="room-code">VL-DEMO</strong></span>
+          <span>You are <strong id="you-label">Aden</strong></span>
+          <span>Seat map <strong id="seat-summary">self · left · right</strong></span>
+        </div>
+      </header>
 
-      <div class="fov-table-stage" id="fov-table-stage">
+      <canvas id="fov-dice-canvas" aria-hidden="true"></canvas>
+
+      <!--
+        Full-viewport perspective stage. Graph ledger lives INSIDE the warped
+        plane (inherits rotateX). Action hub + co-op chips sit in screen space
+        on the wood rim — outside the 3D transform block.
+      -->
+      <div class="fov-table-stage" id="fov-table-stage" aria-label="First-person table stage">
         <div class="fov-table-plane" id="fov-table-plane">
           <div class="fov-table-mesh" aria-hidden="true"></div>
-          <div
-            class="fov-seat-slot is-empty"
-            data-seat="left"
-            id="seat-left"
-            style="left: 16%; top: 46%"
-          >
-            <div class="fov-seat-mini"></div>
-            <div class="fov-seat-name">Left seat</div>
-            <div class="fov-seat-hp">awaiting link…</div>
-          </div>
-          <div
-            class="fov-seat-slot is-empty"
-            data-seat="right"
-            id="seat-right"
-            style="left: 84%; top: 46%"
-          >
-            <div class="fov-seat-mini"></div>
-            <div class="fov-seat-name">Right seat</div>
-            <div class="fov-seat-hp">awaiting link…</div>
-          </div>
-          <div
-            class="fov-seat-slot"
-            data-seat="bottom"
-            id="seat-bottom"
-            style="left: 50%; top: 78%"
-          >
-            <div class="fov-seat-mini"></div>
-            <div class="fov-seat-name" id="seat-bottom-name">You</div>
-            <div class="fov-seat-hp" id="seat-bottom-hp">HP — / —</div>
-          </div>
+
+          <aside class="fov-arbiter" id="fov-arbiter" aria-label="Arbiter seat">
+            <p class="fov-arbiter-kicker">Across the table</p>
+            <h2>The Arbiter</h2>
+            <p class="fov-arbiter-copy" id="fov-arbiter-line">
+              Looking back at you across the wood.
+            </p>
+            <div class="fov-arbiter-status" id="arbiter-status">Awaiting the next throw…</div>
+          </aside>
+
+          <div class="fov-dice-rest" id="fov-dice-rest" aria-hidden="true"></div>
+
+          <section class="fov-ledger" aria-label="Graph ledger on the table plane">
+            <div class="fov-ledger-header">
+              <span>Table ledger · session chronicle</span>
+              <span class="fov-ledger-live" id="ledger-live">Listening</span>
+            </div>
+            <div
+              class="fov-scroll"
+              id="fov-scroll"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
+            >
+              <p class="fov-scroll-line"><strong>Chronicle</strong> — The table waits. Localized seats lock to your device.</p>
+            </div>
+          </section>
         </div>
       </div>
 
-      <aside class="fov-scroll" id="fov-scroll" aria-live="polite">
-        <p class="fov-scroll-line"><strong>Chronicle</strong></p>
-        <p class="fov-scroll-line">The table waits. Localized seats lock to your device.</p>
-      </aside>
+      <!-- Wood-rim action hub: outside perspective warp -->
+      <div class="fov-action-hub" id="fov-action-hub" aria-label="Table edge controls">
+        <article
+          class="fov-coop-chip fov-coop-chip--left"
+          id="coop-left"
+          aria-label="Left co-op seat"
+        >
+          <div class="fov-coop-avatar" id="coop-left-avatar">E</div>
+          <div class="fov-coop-meta">
+            <p class="fov-coop-name" id="coop-left-name">Edward</p>
+            <p class="fov-coop-track" id="coop-left-track">HP — · ready</p>
+          </div>
+        </article>
 
-      <div class="fov-hands" id="fov-hands">
-        <div class="fov-hands-dock">
-          <div class="fov-sheet-dock" id="fov-sheet-dock">
-            <div class="fov-seat-name">Character sheet dock</div>
-            <div class="fov-seat-hp">Equippable items rest at the edge of the wood.</div>
+        <div class="fov-hands" id="fov-hands">
+          <div class="fov-hands-dock">
+            <div class="fov-sheet-dock" id="fov-sheet-dock">
+              <div class="fov-seat-name" id="hands-name">Aden</div>
+              <div class="fov-seat-hp" id="hands-hint">Your hands at the wood rim · dice launch from here</div>
+            </div>
+            <div class="fov-dice-dock" role="group" aria-label="Dice rollers">
+              <button type="button" class="fov-roll-btn" data-sides="20" id="fov-roll-d20">d20</button>
+              <button type="button" class="fov-roll-btn secondary" data-sides="20" data-mod="5" id="fov-roll-d20f">d20+5</button>
+              <button type="button" class="fov-roll-btn secondary" data-sides="6" data-count="2" id="fov-roll-2d6">2d6</button>
+              <button type="button" class="fov-roll-btn secondary" data-sides="8" id="fov-roll-d8">d8</button>
+            </div>
+            <p class="fov-throw-readout" id="throw-readout">Ready · throw launches toward the Arbiter</p>
           </div>
-          <div class="fov-dice-dock">
-            <button type="button" class="fov-roll-btn" id="fov-roll-d20">Roll D20</button>
-          </div>
+          <form class="fov-compose" id="chat-form" autocomplete="off">
+            <label class="sr-only" for="chat-input">Message the table</label>
+            <input
+              class="fov-chat-input"
+              id="chat-input"
+              name="message"
+              type="text"
+              maxlength="280"
+              placeholder="Deed, /roll, or speak across the wood…"
+              aria-label="Chat message"
+            />
+            <button type="submit" class="fov-chat-send" id="chat-send">Send</button>
+          </form>
         </div>
+
+        <article
+          class="fov-coop-chip fov-coop-chip--right"
+          id="coop-right"
+          aria-label="Right co-op seat"
+        >
+          <div class="fov-coop-avatar" id="coop-right-avatar">J</div>
+          <div class="fov-coop-meta">
+            <p class="fov-coop-name" id="coop-right-name">Jamie</p>
+            <p class="fov-coop-track" id="coop-right-track">HP — · ready</p>
+          </div>
+        </article>
       </div>
     </div>
 
@@ -83,14 +129,35 @@
       (function bootFovTable() {
         const store = window.gameStore;
         const engineApi = window.multiplayerEngine;
+        const CHAT_LISTENERS = new Set();
+
         const stage = document.getElementById('fov-table-stage');
         const plane = document.getElementById('fov-table-plane');
         const canvas = document.getElementById('fov-dice-canvas');
         const scroll = document.getElementById('fov-scroll');
-        const rollBtn = document.getElementById('fov-roll-d20');
-        const seatLeft = document.getElementById('seat-left');
-        const seatRight = document.getElementById('seat-right');
-        const seatBottom = document.getElementById('seat-bottom');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const ledgerLive = document.getElementById('ledger-live');
+        const arbiterLine = document.getElementById('fov-arbiter-line');
+        const arbiterStatus = document.getElementById('arbiter-status');
+        const throwReadout = document.getElementById('throw-readout');
+        const diceRest = document.getElementById('fov-dice-rest');
+        const youLabel = document.getElementById('you-label');
+        const seatSummary = document.getElementById('seat-summary');
+        const handsName = document.getElementById('hands-name');
+        const handsHint = document.getElementById('hands-hint');
+        const coopLeft = {
+          root: document.getElementById('coop-left'),
+          avatar: document.getElementById('coop-left-avatar'),
+          name: document.getElementById('coop-left-name'),
+          track: document.getElementById('coop-left-track'),
+        };
+        const coopRight = {
+          root: document.getElementById('coop-right'),
+          avatar: document.getElementById('coop-right-avatar'),
+          name: document.getElementById('coop-right-name'),
+          track: document.getElementById('coop-right-track'),
+        };
 
         engineApi.applyStagePerspective(stage);
         engineApi.applyTablePerspective(plane);
@@ -99,7 +166,7 @@
           engineApi.TABLE_PERSPECTIVE +
           ') rotateX(' +
           engineApi.TABLE_ROTATE_X +
-          ') scale(1.12)';
+          ') scale(1.08)';
 
         const demoPlayers = [
           { id: 'aden', name: 'Aden', user_name: 'Aden', hp: 28, maxHp: 32 },
@@ -112,66 +179,111 @@
         store.setPlayers(demoPlayers);
         store.setActiveProfile(activeId);
         store.setAbsoluteTokenPositions({
-          aden: { x: 50, y: 78 },
-          edward: { x: 18, y: 44 },
-          jamie: { x: 82, y: 44 },
+          aden: { x: 50, y: 88 },
+          edward: { x: 14, y: 78 },
+          jamie: { x: 86, y: 78 },
         });
 
-        const seatEls = {
-          bottom: seatBottom,
-          left: seatLeft,
-          right: seatRight,
+        let activeDie = null;
+        let throwToken = 0;
+
+        /** Keep chat listener registration API intact for external modules / tests. */
+        window.voidlineFovChat = {
+          onMessage: function onMessage(listener) {
+            if (typeof listener !== 'function') {
+              return function noopUnsubscribe() {};
+            }
+            CHAT_LISTENERS.add(listener);
+            return function unsubscribe() {
+              CHAT_LISTENERS.delete(listener);
+            };
+          },
+          getListeners: function getListeners() {
+            return Array.from(CHAT_LISTENERS);
+          },
         };
 
-        const engine = engineApi.createEngine({
-          onFrame: function onFrame(frame) {
-            drawDice(frame.diceParticles);
-          },
-        });
+        function notifyChatListeners(entry) {
+          CHAT_LISTENERS.forEach(function eachListener(listener) {
+            try {
+              listener(entry);
+            } catch (err) {
+              console.error('[fov-chat] listener failed', err);
+            }
+          });
+        }
 
-        Object.keys(seatEls).forEach(function attachSeat(seat) {
-          engine.tokenLerp.attach(seat, seatEls[seat]);
-        });
+        function appendScroll(speaker, text, kind) {
+          const line = document.createElement('p');
+          const kindClass =
+            (kind === 'roll' ? ' is-roll' : '') + (kind === 'system' ? ' is-system' : '');
+          line.className = 'fov-scroll-line' + kindClass;
+          const strong = document.createElement('strong');
+          strong.textContent = speaker;
+          line.appendChild(strong);
+          line.appendChild(document.createTextNode(' — ' + text));
+          scroll.appendChild(line);
+          scroll.scrollTop = scroll.scrollHeight;
+
+          const entry = {
+            id: 'entry-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+            author: speaker,
+            body: text,
+            kind: kind || 'chat',
+            at: Date.now(),
+          };
+          notifyChatListeners(entry);
+          return entry;
+        }
+
+        function paintCoopChip(chip, profile) {
+          if (!chip || !chip.root) return;
+          if (!profile) {
+            chip.root.classList.add('is-empty');
+            if (chip.name) chip.name.textContent = 'Open seat';
+            if (chip.track) chip.track.textContent = 'awaiting link';
+            if (chip.avatar) chip.avatar.textContent = '?';
+            return;
+          }
+          chip.root.classList.remove('is-empty');
+          if (chip.avatar) {
+            chip.avatar.textContent = String(profile.name || '?').slice(0, 1).toUpperCase();
+          }
+          if (chip.name) chip.name.textContent = profile.name || profile.id;
+          if (chip.track) {
+            const hp = profile.hp == null ? '—' : profile.hp;
+            const maxHp = profile.maxHp == null ? '—' : profile.maxHp;
+            chip.track.textContent = 'HP ' + hp + ' / ' + maxHp + ' · ready';
+          }
+        }
 
         function paintSeats() {
           const seatMap = engine.refreshSeatMap();
-          const absolute = store.state.absoluteTokenPositions;
           const profiles = store.state.profiles;
+          const bottomId = seatMap.seats.bottom;
+          const leftId = seatMap.seats.left;
+          const rightId = seatMap.seats.right;
+          const local = bottomId ? profiles[bottomId] : null;
 
-          Object.keys(seatEls).forEach(function clearSeat(seat) {
-            const el = seatEls[seat];
-            el.classList.add('is-empty');
-            el.dataset.profileId = '';
-            const nameEl = el.querySelector('.fov-seat-name');
-            const hpEl = el.querySelector('.fov-seat-hp');
-            if (nameEl) nameEl.textContent = seat === 'bottom' ? 'You' : seat + ' seat';
-            if (hpEl) hpEl.textContent = 'awaiting link…';
-            el.style.left = engineApi.SEAT_ANCHORS[seat].x + '%';
-            el.style.top = engineApi.SEAT_ANCHORS[seat].y + '%';
-          });
+          youLabel.textContent = local ? local.name : '—';
+          seatSummary.textContent = [
+            'self:' + (local ? local.name : '—'),
+            'left:' + (leftId && profiles[leftId] ? profiles[leftId].name : '—'),
+            'right:' + (rightId && profiles[rightId] ? profiles[rightId].name : '—'),
+          ].join(' · ');
 
-          Object.keys(seatMap.byProfileId).forEach(function place(profileId) {
-            const seat = seatMap.byProfileId[profileId];
-            const el = seatEls[seat];
-            if (!el) return;
-            const profile = profiles[profileId] || {};
-            const local = engine.resolveLocalTokenPosition(profileId, absolute);
-            el.classList.remove('is-empty');
-            el.dataset.profileId = profileId;
-            const nameEl = el.querySelector('.fov-seat-name');
-            const hpEl = el.querySelector('.fov-seat-hp');
-            if (nameEl) {
-              nameEl.textContent =
-                seat === 'bottom' ? profile.name || 'You' : profile.name || profileId;
-            }
-            if (hpEl) {
-              const hp = profile.hp == null ? '—' : profile.hp;
-              const maxHp = profile.maxHp == null ? '—' : profile.maxHp;
-              hpEl.textContent = 'HP ' + hp + ' / ' + maxHp;
-            }
-            engine.tokenLerp.attach(profileId, el);
-            engine.tokenLerp.setImmediate(profileId, local);
-          });
+          if (local) {
+            handsName.textContent = local.name;
+            handsHint.textContent =
+              'HP ' +
+              (local.hp == null ? '—' : local.hp) +
+              ' / ' +
+              (local.maxHp == null ? '—' : local.maxHp) +
+              ' · wood rim dock';
+          }
+
+          paintCoopChip(coopLeft, leftId ? profiles[leftId] : null);
+          paintCoopChip(coopRight, rightId ? profiles[rightId] : null);
         }
 
         function resizeCanvas() {
@@ -180,7 +292,9 @@
           canvas.style.width = window.innerWidth + 'px';
           canvas.style.height = window.innerHeight + 'px';
           const ctx = canvas.getContext('2d');
-          if (ctx) ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+          if (ctx) {
+            ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+          }
         }
 
         function drawD20(ctx, x, y, size, rot, value) {
@@ -200,7 +314,7 @@
           ctx.fillStyle = 'rgba(180, 83, 9, 0.92)';
           ctx.fill();
           ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 1.5;
           ctx.stroke();
           ctx.rotate(-rot);
           ctx.fillStyle = '#fdf6e3';
@@ -223,62 +337,190 @@
           ctx.globalAlpha = 1;
         }
 
-        function appendScroll(speaker, text) {
-          const line = document.createElement('p');
-          line.className = 'fov-scroll-line';
-          line.innerHTML = '<strong>' + speaker + '</strong> — ' + text;
-          scroll.appendChild(line);
-          scroll.scrollTop = scroll.scrollHeight;
+        function clearActiveDie() {
+          if (activeDie && activeDie.parentNode) {
+            activeDie.parentNode.removeChild(activeDie);
+          }
+          activeDie = null;
+        }
+
+        function launchDieMeshTowardArbiter(result, sides, originBtn) {
+          const token = ++throwToken;
+          clearActiveDie();
+
+          const startEl =
+            originBtn || document.getElementById('fov-roll-d20') || document.getElementById('fov-hands');
+          const planeRect = plane.getBoundingClientRect();
+          const startRect = startEl.getBoundingClientRect();
+          const restRect = diceRest.getBoundingClientRect();
+
+          const startX = startRect.left + startRect.width / 2 - planeRect.left;
+          const startY = startRect.top + startRect.height / 2 - planeRect.top;
+          const endX = restRect.left + restRect.width / 2 - planeRect.left;
+          const endY = restRect.top + restRect.height / 2 - planeRect.top;
+
+          const vectors = engineApi.getLocalDiceThrowVectors
+            ? engineApi.getLocalDiceThrowVectors({
+                fromSeat: 'bottom',
+                toward: 'arbiter',
+              })
+            : { spinY: 720, driftX: 0 };
+
+          const die = document.createElement('div');
+          die.className = 'fov-die-mesh';
+          die.setAttribute('aria-hidden', 'true');
+          die.textContent = String(result);
+          die.style.left = startX + 'px';
+          die.style.top = startY + 'px';
+          plane.appendChild(die);
+          activeDie = die;
+
+          const dx = endX - startX;
+          const dy = endY - startY;
+          const midX = startX + dx * 0.45 + (vectors.driftX || 0) * 0.08;
+          const midY = startY + dy * 0.45 - Math.abs(dy) * 0.12;
+          const duration = 1100;
+          const started = performance.now();
+
+          throwReadout.textContent = 'Throwing d' + sides + '…';
+          arbiterStatus.textContent = 'Die in flight across the ledger…';
+
+          function frame(now) {
+            if (token !== throwToken) return;
+            const t = Math.min(1, (now - started) / duration);
+            const ease = engineApi.easeOutCubic ? engineApi.easeOutCubic(t) : 1 - Math.pow(1 - t, 3);
+            const omt = 1 - ease;
+            const x = omt * omt * startX + 2 * omt * ease * midX + ease * ease * endX;
+            const y = omt * omt * startY + 2 * omt * ease * midY + ease * ease * endY;
+            const spin = ease * (vectors.spinY || 720);
+            const scale = 1 + Math.sin(ease * Math.PI) * 0.35;
+
+            die.style.left = x + 'px';
+            die.style.top = y + 'px';
+            die.style.transform =
+              'translate(-50%, -50%) rotateX(' +
+              spin * 0.6 +
+              'deg) rotateY(' +
+              spin +
+              'deg) scale(' +
+              scale +
+              ')';
+
+            if (t < 1) {
+              requestAnimationFrame(frame);
+              return;
+            }
+
+            die.classList.add('is-settled');
+            die.style.transform = 'translate(-50%, -50%) rotateX(18deg) rotateY(-12deg) scale(1)';
+            throwReadout.textContent = 'd' + sides + ' → ' + result + ' · settled at the Arbiter';
+            arbiterStatus.textContent = 'Last throw: ' + result + ' on d' + sides;
+            if (arbiterLine) {
+              arbiterLine.textContent =
+                result === sides || result === 20
+                  ? 'The Arbiter smiles. Reality fractures on a natural high.'
+                  : 'The die settles before the Arbiter.';
+            }
+          }
+
+          requestAnimationFrame(frame);
         }
 
         /**
          * Simulate a network roll packet: only seed + final integer travel.
          * Each device builds its own launch vector from the roller seat.
          */
-        function broadcastRoll(rollerId, total) {
+        function broadcastRoll(rollerId, total, sides, originBtn, expression) {
+          const rollExpression = expression || '1d' + sides;
           const packet = engine.buildRollBroadcast({
             rollerId: rollerId,
-            expression: '1d20',
+            expression: rollExpression,
             total: total,
             seed: Date.now(),
           });
-          const rect = plane.getBoundingClientRect();
           engine.handleRollBroadcast(packet, {
             width: window.innerWidth,
             height: window.innerHeight,
-            table: rect,
+            fromDock: true,
           });
+          const profile = store.state.profiles[rollerId];
           appendScroll(
-            store.state.profiles[rollerId] ? store.state.profiles[rollerId].name : rollerId,
-            'rolled 1d20 → ' + total + ' (seed ' + packet.seed + ')'
+            profile ? profile.name : rollerId,
+            'rolled ' + rollExpression + ' → ' + total,
+            'roll'
           );
-          const arbiter = document.getElementById('fov-arbiter-line');
-          if (arbiter) {
-            arbiter.textContent =
-              total === 20
-                ? 'The Arbiter smiles. Reality fractures on a twenty.'
-                : 'The die settles before the Arbiter.';
-          }
+          launchDieMeshTowardArbiter(total, sides, originBtn);
         }
 
-        rollBtn.addEventListener('click', function onRoll() {
-          const activeId = store.state.activeProfileId;
-          const total = 1 + Math.floor(Math.random() * 20);
-          broadcastRoll(activeId, total);
+        const engine = engineApi.createEngine({
+          onFrame: function onFrame(frame) {
+            drawDice(frame.diceParticles);
+          },
         });
 
-        // Demo: peer packets arrive as absolute coords; local lerp glides them over 150ms.
+        function handleChatSubmit(event) {
+          event.preventDefault();
+          const text = (chatInput.value || '').trim();
+          if (!text) return;
+          const localId = store.state.activeProfileId;
+          const author =
+            (store.state.profiles[localId] && store.state.profiles[localId].name) || 'You';
+          appendScroll(author, text, 'chat');
+          chatInput.value = '';
+          ledgerLive.textContent = 'Message sealed';
+          window.setTimeout(function resetLive() {
+            ledgerLive.textContent = 'Listening';
+          }, 900);
+        }
+
+        chatForm.addEventListener('submit', handleChatSubmit);
+        chatInput.addEventListener('keydown', function onChatKeydown(event) {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            ledgerLive.textContent = 'Composing…';
+          }
+        });
+        chatInput.addEventListener('input', function onChatInput() {
+          if (chatInput.value.trim()) {
+            ledgerLive.textContent = 'Typing…';
+          } else {
+            ledgerLive.textContent = 'Listening';
+          }
+        });
+
+        document.querySelectorAll('.fov-roll-btn').forEach(function bindDie(btn) {
+          btn.addEventListener('click', function onRollClick(event) {
+            const sides = Number(btn.getAttribute('data-sides')) || 20;
+            const mod = Number(btn.getAttribute('data-mod')) || 0;
+            const count = Number(btn.getAttribute('data-count')) || 1;
+            let total = 0;
+            for (let i = 0; i < count; i++) {
+              total += 1 + Math.floor(Math.random() * sides);
+            }
+            total += mod;
+            const expression =
+              (count > 1 ? count + 'd' + sides : '1d' + sides) + (mod ? '+' + mod : '');
+            broadcastRoll(
+              store.state.activeProfileId,
+              total,
+              sides,
+              event.currentTarget,
+              expression
+            );
+          });
+        });
+
+        /* Demo: peer packets arrive as absolute coords; local lerp glides them over 150ms. */
         window.setInterval(function peerDrift() {
-          const activeId = store.state.activeProfileId;
-          const peers = store.state.players.filter(function notSelf(p) {
-            return String(p.id) !== String(activeId);
+          const currentActiveId = store.state.activeProfileId;
+          const peers = store.state.players.filter(function notSelf(player) {
+            return String(player.id) !== String(currentActiveId);
           });
           if (!peers.length) return;
           const peer = peers[Math.floor(Math.random() * peers.length)];
           const current = store.state.absoluteTokenPositions[peer.id] || { x: 50, y: 45 };
           const next = {
             x: Math.min(90, Math.max(10, current.x + (Math.random() - 0.5) * 10)),
-            y: Math.min(70, Math.max(20, current.y + (Math.random() - 0.5) * 8)),
+            y: Math.min(80, Math.max(20, current.y + (Math.random() - 0.5) * 8)),
           };
           store.setAbsoluteTokenPosition(peer.id, next);
           engine.ingestPeerPosition(peer.id, next);
@@ -293,7 +535,12 @@
         paintSeats();
         engine.ingestAbsolutePositions(store.state.absoluteTokenPositions);
         engine.start();
-        appendScroll('Table', 'Active profile locked to bottom seat: ' + activeId);
+        appendScroll('Table', 'Active profile locked to bottom seat: ' + activeId, 'system');
+        appendScroll(
+          'Table',
+          'Edward holds the left rim. Jamie holds the right. Ledger paper stays crisp on the felt.',
+          'system'
+        );
       })();
     </script>
   </body>

@@ -30,7 +30,7 @@
   const DICE_REST = { x: 50, y: 22 };
   const LERP_MS = 150;
   const TABLE_PERSPECTIVE = '900px';
-  const TABLE_ROTATE_X = '22deg';
+  const TABLE_ROTATE_X = '25deg';
 
   function clamp(n, min, max) {
     return Math.min(max, Math.max(min, n));
