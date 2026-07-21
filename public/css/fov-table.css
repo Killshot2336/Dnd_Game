@@ -1,0 +1,229 @@
+/* Localized FOV table perspective — independent per device */
+:root {
+  --fov-perspective: 900px;
+  --fov-tilt: 22deg;
+  --fov-scale: 1.12;
+  --fov-origin-y: 78%;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #120c08;
+  color: #f0e2c4;
+  font-family: 'IM Fell English', Georgia, serif;
+}
+
+.fov-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(40, 24, 12, 0.55), transparent 55%),
+    #0a0604;
+}
+
+.fov-horizon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 22%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.fov-arbiter {
+  width: min(280px, 46vw);
+  padding: 0.75rem 1rem;
+  text-align: center;
+  background: linear-gradient(180deg, #2a1810, #1a100c);
+  border: 2px solid #6b4423;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+.fov-arbiter h1 {
+  margin: 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f59e0b;
+}
+
+.fov-arbiter p {
+  margin: 0.35rem 0 0;
+  font-style: italic;
+  font-size: 0.8rem;
+  color: #d6c4a1;
+}
+
+.fov-table-stage {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14%;
+  bottom: 22%;
+  perspective: var(--fov-perspective);
+  perspective-origin: 50% var(--fov-origin-y);
+  z-index: 3;
+}
+
+.fov-table-plane {
+  position: absolute;
+  inset: 4% 8% 0;
+  transform: perspective(var(--fov-perspective)) rotateX(var(--fov-tilt)) scale(var(--fov-scale));
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+  background:
+    linear-gradient(180deg, rgba(20, 12, 8, 0.35), rgba(10, 6, 4, 0.7)),
+    #3a2416;
+  border: 6px solid #2a1810;
+  outline: 1px solid #6b4423;
+  box-shadow:
+    inset 0 0 90px rgba(0, 0, 0, 0.55),
+    0 30px 60px rgba(0, 0, 0, 0.65);
+}
+
+.fov-table-mesh {
+  position: absolute;
+  inset: 8%;
+  border: 1px dashed rgba(107, 68, 35, 0.45);
+  background-image:
+    linear-gradient(rgba(107, 68, 35, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(107, 68, 35, 0.12) 1px, transparent 1px);
+  background-size: 12% 12%;
+  pointer-events: none;
+}
+
+.fov-seat-slot {
+  position: absolute;
+  transform: translate(-50%, -50%) translateZ(18px) rotateX(-22deg);
+  transform-style: preserve-3d;
+  min-width: 4.5rem;
+  text-align: center;
+  z-index: 15;
+}
+
+.fov-seat-slot[data-seat='bottom'] {
+  z-index: 25;
+}
+
+.fov-seat-slot.is-empty {
+  opacity: 0.45;
+}
+
+.fov-seat-mini {
+  width: 3.25rem;
+  height: 4rem;
+  margin: 0 auto;
+  background: #1a120c;
+  border: 1px solid #6b4423;
+  border-radius: 40% 40% 18% 18% / 28% 28% 12% 12%;
+}
+
+.fov-seat-name {
+  margin-top: 0.25rem;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.7rem;
+  color: #f0e2c4;
+}
+
+.fov-seat-hp {
+  font-size: 0.65rem;
+  font-style: italic;
+  color: #b8965c;
+}
+
+.fov-hands {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24%;
+  z-index: 6;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  background: linear-gradient(180deg, transparent, rgba(10, 6, 4, 0.92) 28%);
+}
+
+.fov-hands-dock {
+  width: min(720px, 100%);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.fov-sheet-dock,
+.fov-dice-dock {
+  background: rgba(28, 18, 12, 0.92);
+  border: 1px solid #6b4423;
+  padding: 0.75rem;
+}
+
+.fov-dice-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 9rem;
+}
+
+.fov-roll-btn {
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 0.85rem 1rem;
+  color: #1a100c;
+  background: linear-gradient(135deg, #f59e0b, #b8965c);
+  border: none;
+  cursor: pointer;
+}
+
+.fov-roll-btn:active {
+  transform: translateY(1px);
+}
+
+.fov-scroll {
+  position: absolute;
+  right: 0.75rem;
+  top: 24%;
+  bottom: 26%;
+  width: min(280px, 32vw);
+  z-index: 5;
+  padding: 0.85rem;
+  overflow: auto;
+  background: rgba(40, 24, 14, 0.72);
+  border: 1px solid rgba(184, 150, 92, 0.55);
+  box-shadow: 0 0 24px rgba(180, 83, 9, 0.18);
+  backdrop-filter: blur(8px);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.fov-scroll-line {
+  margin: 0 0 0.55rem;
+  color: #e4d0a2;
+}
+
+.fov-scroll-line strong {
+  color: #f59e0b;
+  font-family: Cinzel, Georgia, serif;
+  font-weight: 700;
+}
+
+#fov-dice-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}

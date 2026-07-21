@@ -630,12 +630,13 @@ body {
 
 /* 2.5D table — base; fluid tilt/scale in responsive.css */
 .fp-table-stage {
-  perspective: var(--table-perspective, 920px);
-  perspective-origin: 50% 72%;
+  perspective: var(--table-perspective, 900px);
+  perspective-origin: 50% 78%;
 }
 
 .fp-table-plane {
-  transform: rotateX(var(--table-tilt, 54deg)) scale(var(--table-scale, 1.16));
+  transform: perspective(var(--table-perspective, 900px)) rotateX(var(--table-tilt, 22deg))
+    scale(var(--table-scale, 1.12));
   transform-origin: 50% 100%;
   transform-style: preserve-3d;
   will-change: transform;

@@ -12,9 +12,9 @@
   --app-pad-right: env(safe-area-inset-right, 0px);
   --table-flex: 1.1fr;
   --book-flex: 1fr;
-  --table-tilt: 58deg;
-  --table-scale: 1.22;
-  --table-perspective: 1100px;
+  --table-tilt: 22deg;
+  --table-scale: 1.12;
+  --table-perspective: 900px;
   --ink-size: clamp(15px, 2.6vw, 17px);
   --touch-min: 44px;
 }
@@ -99,8 +99,8 @@ body {
   :root {
     --table-flex: 0.72fr;
     --book-flex: 1.28fr;
-    --table-tilt: 48deg;
-    --table-scale: 1.12;
+    --table-tilt: 18deg;
+    --table-scale: 1.08;
     --table-perspective: 900px;
   }
 
@@ -132,9 +132,9 @@ body {
   :root {
     --table-flex: 1.35fr;
     --book-flex: 0.8fr;
-    --table-tilt: 58deg;
-    --table-scale: 1.22;
-    --table-perspective: 1100px;
+    --table-tilt: 22deg;
+    --table-scale: 1.12;
+    --table-perspective: 900px;
   }
 
   .room-split {
@@ -144,16 +144,16 @@ body {
 
 /* Short viewports: flatten the table so it doesn't clip */
 html.vv-short {
-  --table-tilt: 42deg;
-  --table-scale: 1.08;
+  --table-tilt: 16deg;
+  --table-scale: 1.06;
   --table-perspective: 820px;
   --table-flex: 0.85fr;
   --book-flex: 1.15fr;
 }
 
 html.vv-tiny {
-  --table-tilt: 34deg;
-  --table-scale: 1.04;
+  --table-tilt: 12deg;
+  --table-scale: 1.02;
   --table-perspective: 700px;
   --table-flex: 0.65fr;
   --book-flex: 1.35fr;
@@ -162,8 +162,8 @@ html.vv-tiny {
 /* Landscape phones / short landscape: side-by-side */
 @media (orientation: landscape) and (max-height: 520px) {
   :root {
-    --table-tilt: 36deg;
-    --table-scale: 1.06;
+    --table-tilt: 14deg;
+    --table-scale: 1.04;
     --table-perspective: 760px;
   }
 
@@ -195,7 +195,8 @@ html.vv-landscape.vv-narrow .room-split {
 }
 
 .fp-table-plane {
-  transform: rotateX(var(--table-tilt)) scale(var(--table-scale)) !important;
+  transform: perspective(var(--table-perspective)) rotateX(var(--table-tilt))
+    scale(var(--table-scale)) !important;
 }
 
 /* Fluid ink + touch */

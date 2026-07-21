@@ -151,13 +151,15 @@
 }
 
 .fp-table-stage {
-  perspective: var(--table-perspective, 1100px);
+  perspective: var(--table-perspective, 900px);
   perspective-origin: 50% 78%;
 }
 
 .fp-table-plane {
-  transform: rotateX(var(--table-tilt, 58deg)) scale(var(--table-scale, 1.22));
+  transform: perspective(var(--table-perspective, 900px)) rotateX(var(--table-tilt, 22deg))
+    scale(var(--table-scale, 1.12));
   transform-origin: 50% 100%;
+  transform-style: preserve-3d;
   filter: blur(0px);
 }
 

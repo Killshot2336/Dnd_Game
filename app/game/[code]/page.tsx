@@ -92,6 +92,15 @@ import {
   type TokenTablePos,
 } from '@/lib/table-meta';
 import {
+  buildLocalSeatMap,
+  createLocalDiceTrajectory,
+  resolveLocalTokenPosition,
+  seatDisplayPosition,
+  seatForProfile,
+  stepDiceParticles,
+  type DiceParticle as PerspectiveDiceParticle,
+} from '@/lib/engines/multiplayerPerspective';
+import {
   playDiceClack,
   playFanfareTick,
   playLanternPass,
@@ -140,18 +149,7 @@ function abilityKeyFromLabel(raw: string): keyof AbilityScores {
   return 'DEX';
 }
 
-interface DiceParticle {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  rotation: number;
-  vRot: number;
-  size: number;
-  alpha: number;
-  value: number;
-}
+interface DiceParticle extends PerspectiveDiceParticle {}
 
 export default function GameRoomPage({ params }: { params: { code: string } }) {
   return (
@@ -204,6 +202,8 @@ function GameRoom({ params }: { params: { code: string } }) {
   const diceParticlesRef = useRef<DiceParticle[]>([]);
   const playerPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
   const currentPlayerNameRef = useRef<string | null>(null);
+  const currentPlayerIdRef = useRef<string | null>(null);
+  const playersRef = useRef<PlayerEntity[]>([]);
   const gameIdRef = useRef<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const reconnectLockRef = useRef(false);
@@ -216,7 +216,12 @@ function GameRoom({ params }: { params: { code: string } }) {
 
   useEffect(() => {
     currentPlayerNameRef.current = currentPlayer?.user_name ?? null;
+    currentPlayerIdRef.current = currentPlayer?.id ?? null;
   }, [currentPlayer]);
+
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
 
   useEffect(() => {
     gameIdRef.current = game?.id ?? null;
@@ -251,35 +256,44 @@ function GameRoom({ params }: { params: { code: string } }) {
     []
   );
 
-  const triggerDiceFromUser = useCallback((senderName: string) => {
-    if (typeof window === 'undefined') return;
-    if (!senderName || senderName === 'GM') return;
+  const triggerDiceFromUser = useCallback(
+    (
+      senderName: string,
+      options?: {
+        rollerId?: string | null;
+        total?: number;
+      }
+    ) => {
+      if (typeof window === 'undefined') return;
+      if (!senderName || senderName === 'GM') return;
 
-    const fallbackX =
-      typeof window.innerWidth === 'number' ? window.innerWidth / 2 : 200;
-    const fallbackY =
-      typeof window.innerHeight === 'number' ? window.innerHeight - 220 : 400;
+      const roster = playersRef.current;
+      const activeId = currentPlayerIdRef.current ?? currentPlayerNameRef.current;
+      const seatMap = buildLocalSeatMap(
+        roster.map((player) => ({
+          id: player.id,
+          user_name: player.user_name,
+          name: player.user_name,
+        })),
+        activeId
+      );
 
-    const origin = playerPositionsRef.current[senderName] || {
-      x: fallbackX,
-      y: fallbackY,
-    };
-
-    for (let i = 0; i < 5; i++) {
-      diceParticlesRef.current.push({
-        id: Math.random(),
-        x: origin.x + (Math.random() - 0.5) * 18,
-        y: origin.y + (Math.random() - 0.5) * 12,
-        vx: (Math.random() - 0.5) * 14,
-        vy: -Math.random() * 12 - 5,
-        rotation: Math.random() * Math.PI,
-        vRot: (Math.random() - 0.5) * 0.25,
-        size: Math.random() * 8 + 16,
-        alpha: 1,
-        value: Math.floor(Math.random() * 20) + 1,
+      const rollerId =
+        options?.rollerId ??
+        roster.find((player) => player.user_name === senderName)?.id ??
+        senderName;
+      const seat = seatForProfile(seatMap, rollerId);
+      const face = options?.total ?? Math.floor(Math.random() * 20) + 1;
+      const spawned = createLocalDiceTrajectory(seat, face, {
+        width: window.innerWidth,
+        height: window.innerHeight,
       });
-    }
-  }, []);
+      for (let i = 0; i < spawned.length; i++) {
+        diceParticlesRef.current.push(spawned[i]);
+      }
+    },
+    []
+  );
 
   const refreshRoomState = useCallback(async (gameId: string) => {
     try {
@@ -402,7 +416,13 @@ function GameRoom({ params }: { params: { code: string } }) {
                 incoming.sender !== 'GM' &&
                 incoming.sender !== currentPlayerNameRef.current
               ) {
-                triggerDiceFromUser(incoming.sender);
+                const peer = playersRef.current.find(
+                  (player) => player.user_name === incoming.sender
+                );
+                triggerDiceFromUser(incoming.sender, {
+                  rollerId: peer?.id ?? incoming.sender,
+                  total: roll.total,
+                });
               }
               setDiceBadge({
                 sender: roll.sender,
@@ -777,6 +797,7 @@ function GameRoom({ params }: { params: { code: string } }) {
 
     let animId = 0;
     let active = true;
+    let lastTs = 0;
 
     const readViewportSize = () => {
       const visualViewport = window.visualViewport;
@@ -859,23 +880,22 @@ function GameRoom({ params }: { params: { code: string } }) {
       c.restore();
     };
 
-    const updateEngine = () => {
+    const updateEngine = (ts: number) => {
       if (!active || !canvasRef.current) return;
       const surface = canvasRef.current;
       const surfaceCtx = surface.getContext('2d');
       if (!surfaceCtx) return;
 
+      if (!lastTs) lastTs = ts;
+      const dt = Math.min(48, ts - lastTs);
+      lastTs = ts;
+
       surfaceCtx.clearRect(0, 0, surface.width, surface.height);
+      stepDiceParticles(diceParticlesRef.current, dt);
       const activeParticles = diceParticlesRef.current;
 
       for (let i = activeParticles.length - 1; i >= 0; i--) {
         const particle = activeParticles[i];
-        particle.x += particle.vx;
-        particle.y += particle.vy;
-        particle.rotation += particle.vRot;
-        particle.vy += 0.2;
-        particle.alpha -= 0.01;
-
         surfaceCtx.globalAlpha = Math.max(0, particle.alpha);
         drawD20(
           surfaceCtx,
@@ -885,10 +905,6 @@ function GameRoom({ params }: { params: { code: string } }) {
           particle.rotation,
           particle.value
         );
-
-        if (particle.alpha <= 0) {
-          activeParticles.splice(i, 1);
-        }
       }
 
       surfaceCtx.globalAlpha = 1;
@@ -1534,7 +1550,10 @@ function GameRoom({ params }: { params: { code: string } }) {
       const content = formatRollMessage(senderName, result);
       setDiceBadge({ sender: senderName, result });
       playDiceClack();
-      triggerDiceFromUser(senderName);
+      triggerDiceFromUser(senderName, {
+        rollerId: currentPlayer?.id ?? senderName,
+        total: result.total,
+      });
       window.setTimeout(() => setDiceBadge(null), 4200);
       setLastSpeaker(senderName);
       await postTableMessage(senderName, content);
@@ -1651,7 +1670,9 @@ function GameRoom({ params }: { params: { code: string } }) {
     }
 
     setIsGMLoading(true);
-    triggerDiceFromUser(senderName);
+    triggerDiceFromUser(senderName, {
+      rollerId: currentPlayer?.id ?? senderName,
+    });
     setLastSpeaker(senderName);
     try {
       await runArbiterTurn({
@@ -1980,8 +2001,40 @@ function GameRoom({ params }: { params: { code: string } }) {
       : null;
 
   const tokenPosFor = (player: PlayerEntity, index: number, isSelf: boolean) => {
-    const saved = tableMeta.tokenPositions[player.user_name];
-    if (saved) return saved;
+    const seatMap = buildLocalSeatMap(
+      players.map((entry) => ({
+        id: entry.id,
+        user_name: entry.user_name,
+        name: entry.user_name,
+      })),
+      currentPlayer?.id ?? currentPlayer?.user_name ?? null
+    );
+
+    const absoluteById: Record<string, { x: number; y: number }> = {};
+    const absoluteByName = tableMeta.tokenPositions;
+    players.forEach((entry) => {
+      const saved = absoluteByName[entry.user_name];
+      if (saved) absoluteById[entry.id] = { x: saved.x, y: saved.y };
+    });
+
+    const savedAbsolute = absoluteByName[player.user_name];
+    if (savedAbsolute) {
+      return resolveLocalTokenPosition(
+        player.id,
+        { ...absoluteById, [player.id]: savedAbsolute },
+        seatMap,
+        players.map((entry) => ({
+          id: entry.id,
+          user_name: entry.user_name,
+          name: entry.user_name,
+        }))
+      );
+    }
+
+    const seat = seatForProfile(seatMap, player.id);
+    if (seat === 'bottom' || seat === 'left' || seat === 'right' || seat === 'far') {
+      return seatDisplayPosition(seat);
+    }
     return defaultTokenPos(index, players.length, isSelf);
   };
 
@@ -2164,6 +2217,7 @@ function GameRoom({ params }: { params: { code: string } }) {
                   key={player.id}
                   player={player}
                   pos={tokenPosFor(player, index, isSelf)}
+                  lerp={!isSelf}
                   emphasized={isSelf}
                   spotlighted={
                     !!tableMeta.spotlight &&

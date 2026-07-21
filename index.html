@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Voidline — First-Person Table</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/fov-table.css" />
+  </head>
+  <body>
+    <div class="fov-root" id="fov-root">
+      <canvas id="fov-dice-canvas"></canvas>
+
+      <div class="fov-horizon" id="fov-horizon">
+        <div class="fov-arbiter">
+          <h1>The Arbiter</h1>
+          <p id="fov-arbiter-line">Looking back at you across the wood.</p>
+        </div>
+      </div>
+
+      <div class="fov-table-stage" id="fov-table-stage">
+        <div class="fov-table-plane" id="fov-table-plane">
+          <div class="fov-table-mesh" aria-hidden="true"></div>
+          <div
+            class="fov-seat-slot is-empty"
+            data-seat="left"
+            id="seat-left"
+            style="left: 16%; top: 46%"
+          >
+            <div class="fov-seat-mini"></div>
+            <div class="fov-seat-name">Left seat</div>
+            <div class="fov-seat-hp">awaiting link…</div>
+          </div>
+          <div
+            class="fov-seat-slot is-empty"
+            data-seat="right"
+            id="seat-right"
+            style="left: 84%; top: 46%"
+          >
+            <div class="fov-seat-mini"></div>
+            <div class="fov-seat-name">Right seat</div>
+            <div class="fov-seat-hp">awaiting link…</div>
+          </div>
+          <div
+            class="fov-seat-slot"
+            data-seat="bottom"
+            id="seat-bottom"
+            style="left: 50%; top: 78%"
+          >
+            <div class="fov-seat-mini"></div>
+            <div class="fov-seat-name" id="seat-bottom-name">You</div>
+            <div class="fov-seat-hp" id="seat-bottom-hp">HP — / —</div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="fov-scroll" id="fov-scroll" aria-live="polite">
+        <p class="fov-scroll-line"><strong>Chronicle</strong></p>
+        <p class="fov-scroll-line">The table waits. Localized seats lock to your device.</p>
+      </aside>
+
+      <div class="fov-hands" id="fov-hands">
+        <div class="fov-hands-dock">
+          <div class="fov-sheet-dock" id="fov-sheet-dock">
+            <div class="fov-seat-name">Character sheet dock</div>
+            <div class="fov-seat-hp">Equippable items rest at the edge of the wood.</div>
+          </div>
+          <div class="fov-dice-dock">
+            <button type="button" class="fov-roll-btn" id="fov-roll-d20">Roll D20</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/js/gameStore.js"></script>
+    <script src="/js/multiplayerEngine.js"></script>
+    <script>
+      (function bootFovTable() {
+        const store = window.gameStore;
+        const engineApi = window.multiplayerEngine;
+        const stage = document.getElementById('fov-table-stage');
+        const plane = document.getElementById('fov-table-plane');
+        const canvas = document.getElementById('fov-dice-canvas');
+        const scroll = document.getElementById('fov-scroll');
+        const rollBtn = document.getElementById('fov-roll-d20');
+        const seatLeft = document.getElementById('seat-left');
+        const seatRight = document.getElementById('seat-right');
+        const seatBottom = document.getElementById('seat-bottom');
+
+        engineApi.applyStagePerspective(stage);
+        engineApi.applyTablePerspective(plane);
+        plane.style.transform =
+          'perspective(' +
+          engineApi.TABLE_PERSPECTIVE +
+          ') rotateX(' +
+          engineApi.TABLE_ROTATE_X +
+          ') scale(1.12)';
+
+        const demoPlayers = [
+          { id: 'aden', name: 'Aden', user_name: 'Aden', hp: 28, maxHp: 32 },
+          { id: 'edward', name: 'Edward', user_name: 'Edward', hp: 24, maxHp: 30 },
+          { id: 'jamie', name: 'Jamie', user_name: 'Jamie', hp: 22, maxHp: 26 },
+        ];
+
+        const params = new URLSearchParams(window.location.search);
+        const activeId = params.get('as') || 'aden';
+        store.setPlayers(demoPlayers);
+        store.setActiveProfile(activeId);
+        store.setAbsoluteTokenPositions({
+          aden: { x: 50, y: 78 },
+          edward: { x: 18, y: 44 },
+          jamie: { x: 82, y: 44 },
+        });
+
+        const seatEls = {
+          bottom: seatBottom,
+          left: seatLeft,
+          right: seatRight,
+        };
+
+        const engine = engineApi.createEngine({
+          onFrame: function onFrame(frame) {
+            drawDice(frame.diceParticles);
+          },
+        });
+
+        Object.keys(seatEls).forEach(function attachSeat(seat) {
+          engine.tokenLerp.attach(seat, seatEls[seat]);
+        });
+
+        function paintSeats() {
+          const seatMap = engine.refreshSeatMap();
+          const absolute = store.state.absoluteTokenPositions;
+          const profiles = store.state.profiles;
+
+          Object.keys(seatEls).forEach(function clearSeat(seat) {
+            const el = seatEls[seat];
+            el.classList.add('is-empty');
+            el.dataset.profileId = '';
+            const nameEl = el.querySelector('.fov-seat-name');
+            const hpEl = el.querySelector('.fov-seat-hp');
+            if (nameEl) nameEl.textContent = seat === 'bottom' ? 'You' : seat + ' seat';
+            if (hpEl) hpEl.textContent = 'awaiting link…';
+            el.style.left = engineApi.SEAT_ANCHORS[seat].x + '%';
+            el.style.top = engineApi.SEAT_ANCHORS[seat].y + '%';
+          });
+
+          Object.keys(seatMap.byProfileId).forEach(function place(profileId) {
+            const seat = seatMap.byProfileId[profileId];
+            const el = seatEls[seat];
+            if (!el) return;
+            const profile = profiles[profileId] || {};
+            const local = engine.resolveLocalTokenPosition(profileId, absolute);
+            el.classList.remove('is-empty');
+            el.dataset.profileId = profileId;
+            const nameEl = el.querySelector('.fov-seat-name');
+            const hpEl = el.querySelector('.fov-seat-hp');
+            if (nameEl) {
+              nameEl.textContent =
+                seat === 'bottom' ? profile.name || 'You' : profile.name || profileId;
+            }
+            if (hpEl) {
+              const hp = profile.hp == null ? '—' : profile.hp;
+              const maxHp = profile.maxHp == null ? '—' : profile.maxHp;
+              hpEl.textContent = 'HP ' + hp + ' / ' + maxHp;
+            }
+            engine.tokenLerp.attach(profileId, el);
+            engine.tokenLerp.setImmediate(profileId, local);
+          });
+        }
+
+        function resizeCanvas() {
+          canvas.width = window.innerWidth * (window.devicePixelRatio || 1);
+          canvas.height = window.innerHeight * (window.devicePixelRatio || 1);
+          canvas.style.width = window.innerWidth + 'px';
+          canvas.style.height = window.innerHeight + 'px';
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+        }
+
+        function drawD20(ctx, x, y, size, rot, value) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(rot);
+          ctx.globalAlpha = 1;
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const a = (Math.PI / 3) * i - Math.PI / 2;
+            const px = Math.cos(a) * size;
+            const py = Math.sin(a) * size;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(180, 83, 9, 0.92)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.rotate(-rot);
+          ctx.fillStyle = '#fdf6e3';
+          ctx.font = 'bold ' + Math.max(10, size * 0.7) + 'px Cinzel, serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(value), 0, 1);
+          ctx.restore();
+        }
+
+        function drawDice(particles) {
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            ctx.globalAlpha = Math.max(0, p.alpha);
+            drawD20(ctx, p.x, p.y, p.size, p.rotation, p.value);
+          }
+          ctx.globalAlpha = 1;
+        }
+
+        function appendScroll(speaker, text) {
+          const line = document.createElement('p');
+          line.className = 'fov-scroll-line';
+          line.innerHTML = '<strong>' + speaker + '</strong> — ' + text;
+          scroll.appendChild(line);
+          scroll.scrollTop = scroll.scrollHeight;
+        }
+
+        /**
+         * Simulate a network roll packet: only seed + final integer travel.
+         * Each device builds its own launch vector from the roller seat.
+         */
+        function broadcastRoll(rollerId, total) {
+          const packet = engine.buildRollBroadcast({
+            rollerId: rollerId,
+            expression: '1d20',
+            total: total,
+            seed: Date.now(),
+          });
+          const rect = plane.getBoundingClientRect();
+          engine.handleRollBroadcast(packet, {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            table: rect,
+          });
+          appendScroll(
+            store.state.profiles[rollerId] ? store.state.profiles[rollerId].name : rollerId,
+            'rolled 1d20 → ' + total + ' (seed ' + packet.seed + ')'
+          );
+          const arbiter = document.getElementById('fov-arbiter-line');
+          if (arbiter) {
+            arbiter.textContent =
+              total === 20
+                ? 'The Arbiter smiles. Reality fractures on a twenty.'
+                : 'The die settles before the Arbiter.';
+          }
+        }
+
+        rollBtn.addEventListener('click', function onRoll() {
+          const activeId = store.state.activeProfileId;
+          const total = 1 + Math.floor(Math.random() * 20);
+          broadcastRoll(activeId, total);
+        });
+
+        // Demo: peer packets arrive as absolute coords; local lerp glides them over 150ms.
+        window.setInterval(function peerDrift() {
+          const activeId = store.state.activeProfileId;
+          const peers = store.state.players.filter(function notSelf(p) {
+            return String(p.id) !== String(activeId);
+          });
+          if (!peers.length) return;
+          const peer = peers[Math.floor(Math.random() * peers.length)];
+          const current = store.state.absoluteTokenPositions[peer.id] || { x: 50, y: 45 };
+          const next = {
+            x: Math.min(90, Math.max(10, current.x + (Math.random() - 0.5) * 10)),
+            y: Math.min(70, Math.max(20, current.y + (Math.random() - 0.5) * 8)),
+          };
+          store.setAbsoluteTokenPosition(peer.id, next);
+          engine.ingestPeerPosition(peer.id, next);
+        }, 2400);
+
+        store.subscribe(function onStore() {
+          paintSeats();
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        paintSeats();
+        engine.ingestAbsolutePositions(store.state.absoluteTokenPositions);
+        engine.start();
+        appendScroll('Table', 'Active profile locked to bottom seat: ' + activeId);
+      })();
+    </script>
+  </body>
+</html>
