@@ -91,6 +91,7 @@ import {
   writeTableMeta,
   type TokenTablePos,
 } from '@/lib/table-meta';
+import { triggerCosmicReverberation } from '@/lib/cosmic-reverberation';
 import {
   playDiceClack,
   playFanfareTick,
@@ -1547,6 +1548,13 @@ function GameRoom({ params }: { params: { code: string } }) {
       const label = result.label ?? (bindsCheck ? pending?.label : undefined);
       const ability = result.ability ?? (bindsCheck ? pending?.ability : undefined);
       const graded = gradeRollOutcome(result, dc);
+
+      if (graded.outcome === 'crit_success' || graded.outcome === 'crit_fail') {
+        triggerCosmicReverberation(graded.outcome === 'crit_success' ? 1.45 : 1.2);
+        playScreenPunch();
+        setScreenPunch(true);
+        window.setTimeout(() => setScreenPunch(false), 320);
+      }
 
       const shouldResolve =
         dc != null ||
