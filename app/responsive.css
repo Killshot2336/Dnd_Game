@@ -113,10 +113,11 @@ body {
     width: min(78%, 14rem) !important;
   }
 
-  .chronicle-on-felt {
-    width: min(94%, 28rem) !important;
-    height: min(48%, 22rem) !important;
-    top: 46% !important;
+  .chronicle-on-felt,
+  .chronicle-layer {
+    width: 92% !important;
+    height: 40% !important;
+    top: 44% !important;
   }
 }
 
@@ -136,9 +137,10 @@ body {
     --table-perspective: 900px;
   }
 
-  .chronicle-on-felt {
-    width: min(70%, 36rem) !important;
-    height: min(50%, 28rem) !important;
+  .chronicle-on-felt,
+  .chronicle-layer {
+    width: min(70%, 42rem) !important;
+    height: 45% !important;
   }
 }
 

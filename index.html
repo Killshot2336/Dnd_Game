@@ -3,48 +3,53 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Voidline — First-Person Table</title>
+    <title>Voidline — Layered Table</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/css/fov-table.css" />
   </head>
   <body>
     <div class="fov-root" id="fov-root">
-      <canvas id="fov-dice-canvas"></canvas>
+      <canvas id="fov-dice-canvas" aria-hidden="true"></canvas>
 
-      <div class="fov-horizon" id="fov-horizon">
-        <div class="fov-arbiter">
-          <h1>The Arbiter</h1>
-          <p id="fov-arbiter-line">Looking back at you across the wood.</p>
-        </div>
-      </div>
-
-      <div class="fov-table-stage" id="fov-table-stage">
+      <!--
+        LAYER 1 — 3D gameboard only.
+        perspective(900px) rotateX(25deg) applies here exclusively.
+        Mask/gradient fade is bound to this viewport alone.
+        Contents: felt mesh, Arbiter, seat tokens. No ledger. No dock.
+      -->
+      <div class="fov-table-stage" id="fov-table-stage" aria-label="3D gameboard">
         <div class="fov-table-plane" id="fov-table-plane">
           <div class="fov-table-mesh" aria-hidden="true"></div>
+
+          <aside class="fov-arbiter" id="fov-arbiter">
+            <h2>The Arbiter</h2>
+            <p id="fov-arbiter-line">Looking back at you across the wood.</p>
+          </aside>
+
           <div
             class="fov-seat-slot is-empty"
             data-seat="left"
             id="seat-left"
-            style="left: 16%; top: 46%"
+            style="left: 16%; top: 52%"
           >
-            <div class="fov-seat-mini"></div>
-            <div class="fov-seat-name">Left seat</div>
-            <div class="fov-seat-hp">awaiting link…</div>
+            <div class="fov-seat-mini" id="seat-left-avatar">E</div>
+            <div class="fov-seat-name" id="seat-left-name">Left seat</div>
+            <div class="fov-seat-hp" id="seat-left-hp">awaiting link…</div>
           </div>
           <div
             class="fov-seat-slot is-empty"
             data-seat="right"
             id="seat-right"
-            style="left: 84%; top: 46%"
+            style="left: 84%; top: 52%"
           >
-            <div class="fov-seat-mini"></div>
-            <div class="fov-seat-name">Right seat</div>
-            <div class="fov-seat-hp">awaiting link…</div>
+            <div class="fov-seat-mini" id="seat-right-avatar">J</div>
+            <div class="fov-seat-name" id="seat-right-name">Right seat</div>
+            <div class="fov-seat-hp" id="seat-right-hp">awaiting link…</div>
           </div>
           <div
             class="fov-seat-slot"
@@ -52,28 +57,110 @@
             id="seat-bottom"
             style="left: 50%; top: 78%"
           >
-            <div class="fov-seat-mini"></div>
+            <div class="fov-seat-mini" id="seat-bottom-avatar">A</div>
             <div class="fov-seat-name" id="seat-bottom-name">You</div>
             <div class="fov-seat-hp" id="seat-bottom-hp">HP — / —</div>
           </div>
         </div>
       </div>
 
-      <aside class="fov-scroll" id="fov-scroll" aria-live="polite">
-        <p class="fov-scroll-line"><strong>Chronicle</strong></p>
-        <p class="fov-scroll-line">The table waits. Localized seats lock to your device.</p>
-      </aside>
-
-      <div class="fov-hands" id="fov-hands">
-        <div class="fov-hands-dock">
-          <div class="fov-sheet-dock" id="fov-sheet-dock">
-            <div class="fov-seat-name">Character sheet dock</div>
-            <div class="fov-seat-hp">Equippable items rest at the edge of the wood.</div>
-          </div>
-          <div class="fov-dice-dock">
-            <button type="button" class="fov-roll-btn" id="fov-roll-d20">Roll D20</button>
-          </div>
+      <!--
+        LAYER 2 — Flat narrative ledger.
+        Independent absolute sheet above the felt. No perspective warp.
+      -->
+      <section
+        class="fov-ledger-layer absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] max-w-2xl h-[45%] bg-[#f4ebd0] border-2 border-[#d4c59a] rounded-lg shadow-2xl p-6 overflow-y-auto z-30 font-serif text-[#1c1b17]"
+        id="fov-ledger-layer"
+        aria-label="Session chronicle"
+      >
+        <div class="fov-ledger-header">
+          <span>The chronicle</span>
+          <span class="fov-ledger-live" id="ledger-live">Listening</span>
         </div>
+        <div
+          class="fov-scroll"
+          id="fov-scroll"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+        >
+          <p class="fov-scroll-line">
+            <strong>Chronicle</strong> — The table waits. Localized seats lock to your device.
+          </p>
+        </div>
+      </section>
+
+      <!--
+        LAYER 3 — Fixed wood control dock at the display rim.
+        Completely outside the warped 3D element tree.
+      -->
+      <div
+        class="fov-control-dock fixed bottom-0 left-0 right-0 w-full h-[180px] bg-[#1a120e] border-t-2 border-[#8a6d4b]/50 p-4 z-50 flex flex-col justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.9)]"
+        id="fov-control-dock"
+        aria-label="Player control dock"
+      >
+        <div class="fov-dock-row">
+          <article class="fov-coop-chip" id="coop-left" aria-label="Left co-op seat">
+            <div class="fov-coop-avatar" id="coop-left-avatar">E</div>
+            <div class="fov-coop-meta">
+              <p class="fov-coop-name" id="coop-left-name">Edward</p>
+              <p class="fov-coop-track" id="coop-left-track">HP — · ready</p>
+            </div>
+          </article>
+
+          <div class="fov-dock-main">
+            <div class="fov-dice-dock" role="group" aria-label="Dice selection">
+              <button type="button" class="fov-roll-btn" data-sides="20" id="fov-roll-d20">d20</button>
+              <button
+                type="button"
+                class="fov-roll-btn secondary"
+                data-sides="20"
+                data-mod="5"
+                id="fov-roll-d20f"
+              >
+                d20+5
+              </button>
+              <button
+                type="button"
+                class="fov-roll-btn secondary"
+                data-sides="6"
+                data-count="2"
+                id="fov-roll-2d6"
+              >
+                2d6
+              </button>
+              <button type="button" class="fov-roll-btn secondary" data-sides="8" id="fov-roll-d8">
+                d8
+              </button>
+            </div>
+            <form class="fov-compose" id="chat-form" autocomplete="off">
+              <label class="sr-only" for="chat-input">Deed or chat</label>
+              <textarea
+                class="fov-chat-input"
+                id="chat-input"
+                name="message"
+                rows="2"
+                maxlength="280"
+                placeholder="Deed, /roll, or /gm ask your buddy…"
+                aria-label="Chat textarea"
+              ></textarea>
+              <button type="submit" class="fov-chat-send" id="chat-send">Seal</button>
+            </form>
+          </div>
+
+          <article
+            class="fov-coop-chip fov-coop-chip--right"
+            id="coop-right"
+            aria-label="Right co-op seat"
+          >
+            <div class="fov-coop-avatar" id="coop-right-avatar">J</div>
+            <div class="fov-coop-meta">
+              <p class="fov-coop-name" id="coop-right-name">Jamie</p>
+              <p class="fov-coop-track" id="coop-right-track">HP — · ready</p>
+            </div>
+          </article>
+        </div>
+        <p class="fov-throw-readout" id="throw-readout">Ready · rolls launch toward the Arbiter</p>
       </div>
     </div>
 
@@ -83,14 +170,34 @@
       (function bootFovTable() {
         const store = window.gameStore;
         const engineApi = window.multiplayerEngine;
+        const CHAT_LISTENERS = new Set();
+
         const stage = document.getElementById('fov-table-stage');
         const plane = document.getElementById('fov-table-plane');
         const canvas = document.getElementById('fov-dice-canvas');
         const scroll = document.getElementById('fov-scroll');
-        const rollBtn = document.getElementById('fov-roll-d20');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const ledgerLive = document.getElementById('ledger-live');
+        const arbiterLine = document.getElementById('fov-arbiter-line');
+        const throwReadout = document.getElementById('throw-readout');
+
         const seatLeft = document.getElementById('seat-left');
         const seatRight = document.getElementById('seat-right');
         const seatBottom = document.getElementById('seat-bottom');
+
+        const coopLeft = {
+          root: document.getElementById('coop-left'),
+          avatar: document.getElementById('coop-left-avatar'),
+          name: document.getElementById('coop-left-name'),
+          track: document.getElementById('coop-left-track'),
+        };
+        const coopRight = {
+          root: document.getElementById('coop-right'),
+          avatar: document.getElementById('coop-right-avatar'),
+          name: document.getElementById('coop-right-name'),
+          track: document.getElementById('coop-right-track'),
+        };
 
         engineApi.applyStagePerspective(stage);
         engineApi.applyTablePerspective(plane);
@@ -98,8 +205,8 @@
           'perspective(' +
           engineApi.TABLE_PERSPECTIVE +
           ') rotateX(' +
-          engineApi.TABLE_ROTATE_X +
-          ') scale(1.12)';
+          (engineApi.TABLE_ROTATE_X || '25deg') +
+          ') scale(1.1)';
 
         const demoPlayers = [
           { id: 'aden', name: 'Aden', user_name: 'Aden', hp: 28, maxHp: 32 },
@@ -113,8 +220,8 @@
         store.setActiveProfile(activeId);
         store.setAbsoluteTokenPositions({
           aden: { x: 50, y: 78 },
-          edward: { x: 18, y: 44 },
-          jamie: { x: 82, y: 44 },
+          edward: { x: 18, y: 52 },
+          jamie: { x: 82, y: 52 },
         });
 
         const seatEls = {
@@ -122,6 +229,55 @@
           left: seatLeft,
           right: seatRight,
         };
+
+        /** Keep chat listener registration API intact for external modules / tests. */
+        window.voidlineFovChat = {
+          onMessage: function onMessage(listener) {
+            if (typeof listener !== 'function') {
+              return function noopUnsubscribe() {};
+            }
+            CHAT_LISTENERS.add(listener);
+            return function unsubscribe() {
+              CHAT_LISTENERS.delete(listener);
+            };
+          },
+          getListeners: function getListeners() {
+            return Array.from(CHAT_LISTENERS);
+          },
+        };
+
+        function notifyChatListeners(entry) {
+          CHAT_LISTENERS.forEach(function eachListener(listener) {
+            try {
+              listener(entry);
+            } catch (err) {
+              console.error('[fov-chat] listener failed', err);
+            }
+          });
+        }
+
+        function appendScroll(speaker, text, kind) {
+          const line = document.createElement('p');
+          const kindClass =
+            (kind === 'roll' ? ' is-roll' : '') + (kind === 'system' ? ' is-system' : '');
+          line.className = 'fov-scroll-line' + kindClass;
+          const strong = document.createElement('strong');
+          strong.textContent = speaker;
+          line.appendChild(strong);
+          line.appendChild(document.createTextNode(' — ' + text));
+          scroll.appendChild(line);
+          scroll.scrollTop = scroll.scrollHeight;
+
+          const entry = {
+            id: 'entry-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+            author: speaker,
+            body: text,
+            kind: kind || 'chat',
+            at: Date.now(),
+          };
+          notifyChatListeners(entry);
+          return entry;
+        }
 
         const engine = engineApi.createEngine({
           onFrame: function onFrame(frame) {
@@ -132,6 +288,27 @@
         Object.keys(seatEls).forEach(function attachSeat(seat) {
           engine.tokenLerp.attach(seat, seatEls[seat]);
         });
+
+        function paintCoopChip(chip, profile) {
+          if (!chip || !chip.root) return;
+          if (!profile) {
+            chip.root.classList.add('is-empty');
+            if (chip.name) chip.name.textContent = 'Open seat';
+            if (chip.track) chip.track.textContent = 'awaiting link';
+            if (chip.avatar) chip.avatar.textContent = '?';
+            return;
+          }
+          chip.root.classList.remove('is-empty');
+          if (chip.avatar) {
+            chip.avatar.textContent = String(profile.name || '?').slice(0, 1).toUpperCase();
+          }
+          if (chip.name) chip.name.textContent = profile.name || profile.id;
+          if (chip.track) {
+            const hp = profile.hp == null ? '—' : profile.hp;
+            const maxHp = profile.maxHp == null ? '—' : profile.maxHp;
+            chip.track.textContent = 'HP ' + hp + ' / ' + maxHp + ' · ready';
+          }
+        }
 
         function paintSeats() {
           const seatMap = engine.refreshSeatMap();
@@ -144,8 +321,10 @@
             el.dataset.profileId = '';
             const nameEl = el.querySelector('.fov-seat-name');
             const hpEl = el.querySelector('.fov-seat-hp');
+            const avatarEl = el.querySelector('.fov-seat-mini');
             if (nameEl) nameEl.textContent = seat === 'bottom' ? 'You' : seat + ' seat';
             if (hpEl) hpEl.textContent = 'awaiting link…';
+            if (avatarEl) avatarEl.textContent = '?';
             el.style.left = engineApi.SEAT_ANCHORS[seat].x + '%';
             el.style.top = engineApi.SEAT_ANCHORS[seat].y + '%';
           });
@@ -160,6 +339,7 @@
             el.dataset.profileId = profileId;
             const nameEl = el.querySelector('.fov-seat-name');
             const hpEl = el.querySelector('.fov-seat-hp');
+            const avatarEl = el.querySelector('.fov-seat-mini');
             if (nameEl) {
               nameEl.textContent =
                 seat === 'bottom' ? profile.name || 'You' : profile.name || profileId;
@@ -169,9 +349,15 @@
               const maxHp = profile.maxHp == null ? '—' : profile.maxHp;
               hpEl.textContent = 'HP ' + hp + ' / ' + maxHp;
             }
+            if (avatarEl) {
+              avatarEl.textContent = String(profile.name || '?').slice(0, 1).toUpperCase();
+            }
             engine.tokenLerp.attach(profileId, el);
             engine.tokenLerp.setImmediate(profileId, local);
           });
+
+          paintCoopChip(coopLeft, seatMap.seats.left ? profiles[seatMap.seats.left] : null);
+          paintCoopChip(coopRight, seatMap.seats.right ? profiles[seatMap.seats.right] : null);
         }
 
         function resizeCanvas() {
@@ -180,7 +366,9 @@
           canvas.style.width = window.innerWidth + 'px';
           canvas.style.height = window.innerHeight + 'px';
           const ctx = canvas.getContext('2d');
-          if (ctx) ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+          if (ctx) {
+            ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+          }
         }
 
         function drawD20(ctx, x, y, size, rot, value) {
@@ -223,55 +411,89 @@
           ctx.globalAlpha = 1;
         }
 
-        function appendScroll(speaker, text) {
-          const line = document.createElement('p');
-          line.className = 'fov-scroll-line';
-          line.innerHTML = '<strong>' + speaker + '</strong> — ' + text;
-          scroll.appendChild(line);
-          scroll.scrollTop = scroll.scrollHeight;
-        }
-
         /**
          * Simulate a network roll packet: only seed + final integer travel.
          * Each device builds its own launch vector from the roller seat.
+         * RNG matrix loops remain intact — trajectory is local-only.
          */
-        function broadcastRoll(rollerId, total) {
+        function broadcastRoll(rollerId, total, sides, expression) {
+          const rollExpression = expression || '1d' + sides;
           const packet = engine.buildRollBroadcast({
             rollerId: rollerId,
-            expression: '1d20',
+            expression: rollExpression,
             total: total,
             seed: Date.now(),
           });
-          const rect = plane.getBoundingClientRect();
           engine.handleRollBroadcast(packet, {
             width: window.innerWidth,
             height: window.innerHeight,
-            table: rect,
+            fromDock: true,
           });
+          const profile = store.state.profiles[rollerId];
           appendScroll(
-            store.state.profiles[rollerId] ? store.state.profiles[rollerId].name : rollerId,
-            'rolled 1d20 → ' + total + ' (seed ' + packet.seed + ')'
+            profile ? profile.name : rollerId,
+            'rolled ' + rollExpression + ' → ' + total + ' (seed ' + packet.seed + ')',
+            'roll'
           );
-          const arbiter = document.getElementById('fov-arbiter-line');
-          if (arbiter) {
-            arbiter.textContent =
-              total === 20
-                ? 'The Arbiter smiles. Reality fractures on a twenty.'
+          throwReadout.textContent = rollExpression + ' → ' + total + ' · in flight';
+          if (arbiterLine) {
+            arbiterLine.textContent =
+              total === 20 || total === sides
+                ? 'The Arbiter smiles. Reality fractures on a natural high.'
                 : 'The die settles before the Arbiter.';
           }
         }
 
-        rollBtn.addEventListener('click', function onRoll() {
-          const activeId = store.state.activeProfileId;
-          const total = 1 + Math.floor(Math.random() * 20);
-          broadcastRoll(activeId, total);
+        function handleChatSubmit(event) {
+          event.preventDefault();
+          const text = (chatInput.value || '').trim();
+          if (!text) return;
+          const localId = store.state.activeProfileId;
+          const author =
+            (store.state.profiles[localId] && store.state.profiles[localId].name) || 'You';
+          appendScroll(author, text, 'chat');
+          chatInput.value = '';
+          ledgerLive.textContent = 'Message sealed';
+          window.setTimeout(function resetLive() {
+            ledgerLive.textContent = 'Listening';
+          }, 900);
+        }
+
+        chatForm.addEventListener('submit', handleChatSubmit);
+        chatInput.addEventListener('keydown', function onChatKeydown(event) {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            handleChatSubmit(event);
+          }
+        });
+        chatInput.addEventListener('input', function onChatInput() {
+          if (chatInput.value.trim()) {
+            ledgerLive.textContent = 'Typing…';
+          } else {
+            ledgerLive.textContent = 'Listening';
+          }
         });
 
-        // Demo: peer packets arrive as absolute coords; local lerp glides them over 150ms.
+        document.querySelectorAll('.fov-roll-btn').forEach(function bindDie(btn) {
+          btn.addEventListener('click', function onRollClick() {
+            const sides = Number(btn.getAttribute('data-sides')) || 20;
+            const mod = Number(btn.getAttribute('data-mod')) || 0;
+            const count = Number(btn.getAttribute('data-count')) || 1;
+            let total = 0;
+            for (let rollIndex = 0; rollIndex < count; rollIndex++) {
+              total += 1 + Math.floor(Math.random() * sides);
+            }
+            total += mod;
+            const expression =
+              (count > 1 ? count + 'd' + sides : '1d' + sides) + (mod ? '+' + mod : '');
+            broadcastRoll(store.state.activeProfileId, total, sides, expression);
+          });
+        });
+
         window.setInterval(function peerDrift() {
-          const activeId = store.state.activeProfileId;
-          const peers = store.state.players.filter(function notSelf(p) {
-            return String(p.id) !== String(activeId);
+          const currentActiveId = store.state.activeProfileId;
+          const peers = store.state.players.filter(function notSelf(player) {
+            return String(player.id) !== String(currentActiveId);
           });
           if (!peers.length) return;
           const peer = peers[Math.floor(Math.random() * peers.length)];
@@ -293,7 +515,12 @@
         paintSeats();
         engine.ingestAbsolutePositions(store.state.absoluteTokenPositions);
         engine.start();
-        appendScroll('Table', 'Active profile locked to bottom seat: ' + activeId);
+        appendScroll('Table', 'Active profile locked to bottom seat: ' + activeId, 'system');
+        appendScroll(
+          'Table',
+          'Layers isolated — 3D arena, flat ledger, fixed wood dock.',
+          'system'
+        );
       })();
     </script>
   </body>

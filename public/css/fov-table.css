@@ -1,53 +1,113 @@
-/* Localized FOV table perspective — independent per device */
+/* Layered FOV table — 3D arena / flat ledger / fixed wood dock */
 :root {
   --fov-perspective: 900px;
-  --fov-tilt: 22deg;
-  --fov-scale: 1.12;
-  --fov-origin-y: 78%;
+  --fov-tilt: 25deg;
+  --fov-scale: 1.1;
+  --fov-origin-y: 88%;
 }
 
 html,
 body {
   margin: 0;
   min-height: 100%;
-  background: #120c08;
+  height: 100%;
+  background: #0a0604;
   color: #f0e2c4;
   font-family: 'IM Fell English', Georgia, serif;
+  overflow: hidden;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .fov-root {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(40, 24, 12, 0.55), transparent 55%),
-    #0a0604;
+  background: #0a0604;
 }
 
-.fov-horizon {
+/* ——— Layer 1: 3D gameboard only (warp + mask bound here) ——— */
+.fov-table-stage {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 22%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 4;
+  inset: 0;
+  z-index: 10;
+  perspective: var(--fov-perspective);
+  perspective-origin: 50% var(--fov-origin-y);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 6%,
+    #000 78%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 6%,
+    #000 78%,
+    transparent 100%
+  );
+}
+
+.fov-table-plane {
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  top: -4%;
+  bottom: 12%;
+  transform: perspective(var(--fov-perspective)) rotateX(var(--fov-tilt)) scale(var(--fov-scale));
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+  background:
+    linear-gradient(180deg, rgba(20, 12, 8, 0.35), rgba(10, 6, 4, 0.55)),
+    #3a2416;
+  border: 7px solid #2a1810;
+  outline: 1px solid #6b4423;
+  box-shadow:
+    inset 0 0 90px rgba(0, 0, 0, 0.55),
+    0 30px 60px rgba(0, 0, 0, 0.65);
+}
+
+.fov-table-mesh {
+  position: absolute;
+  inset: 8%;
+  border: 1px dashed rgba(107, 68, 35, 0.4);
+  background-image:
+    linear-gradient(rgba(107, 68, 35, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(107, 68, 35, 0.12) 1px, transparent 1px);
+  background-size: 12% 12%;
   pointer-events: none;
 }
 
 .fov-arbiter {
+  position: absolute;
+  top: 6%;
+  left: 50%;
+  z-index: 5;
   width: min(280px, 46vw);
   padding: 0.75rem 1rem;
   text-align: center;
+  transform: translateX(-50%) translateZ(24px);
   background: linear-gradient(180deg, #2a1810, #1a100c);
   border: 2px solid #6b4423;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
 }
 
-.fov-arbiter h1 {
+.fov-arbiter h1,
+.fov-arbiter h2 {
   margin: 0;
   font-family: Cinzel, Georgia, serif;
   font-size: 0.95rem;
@@ -63,55 +123,13 @@ body {
   color: #d6c4a1;
 }
 
-.fov-table-stage {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 14%;
-  bottom: 22%;
-  perspective: var(--fov-perspective);
-  perspective-origin: 50% var(--fov-origin-y);
-  z-index: 3;
-}
-
-.fov-table-plane {
-  position: absolute;
-  inset: 4% 8% 0;
-  transform: perspective(var(--fov-perspective)) rotateX(var(--fov-tilt)) scale(var(--fov-scale));
-  transform-origin: 50% 100%;
-  transform-style: preserve-3d;
-  background:
-    linear-gradient(180deg, rgba(20, 12, 8, 0.35), rgba(10, 6, 4, 0.7)),
-    #3a2416;
-  border: 6px solid #2a1810;
-  outline: 1px solid #6b4423;
-  box-shadow:
-    inset 0 0 90px rgba(0, 0, 0, 0.55),
-    0 30px 60px rgba(0, 0, 0, 0.65);
-}
-
-.fov-table-mesh {
-  position: absolute;
-  inset: 8%;
-  border: 1px dashed rgba(107, 68, 35, 0.45);
-  background-image:
-    linear-gradient(rgba(107, 68, 35, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(107, 68, 35, 0.12) 1px, transparent 1px);
-  background-size: 12% 12%;
-  pointer-events: none;
-}
-
 .fov-seat-slot {
   position: absolute;
-  transform: translate(-50%, -50%) translateZ(18px) rotateX(-22deg);
+  transform: translate(-50%, -50%) translateZ(18px);
   transform-style: preserve-3d;
   min-width: 4.5rem;
   text-align: center;
   z-index: 15;
-}
-
-.fov-seat-slot[data-seat='bottom'] {
-  z-index: 25;
 }
 
 .fov-seat-slot.is-empty {
@@ -125,6 +143,11 @@ body {
   background: #1a120c;
   border: 1px solid #6b4423;
   border-radius: 40% 40% 18% 18% / 28% 28% 12% 12%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Cinzel, Georgia, serif;
+  color: #f0e2c4;
 }
 
 .fov-seat-name {
@@ -140,90 +163,255 @@ body {
   color: #b8965c;
 }
 
-.fov-hands {
+/* ——— Layer 2: flat narrative ledger (no perspective) ——— */
+.fov-ledger-layer {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 24%;
-  z-index: 6;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
-  box-sizing: border-box;
-  background: linear-gradient(180deg, transparent, rgba(10, 6, 4, 0.92) 28%);
-}
-
-.fov-hands-dock {
-  width: min(720px, 100%);
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.75rem;
-  align-items: end;
-}
-
-.fov-sheet-dock,
-.fov-dice-dock {
-  background: rgba(28, 18, 12, 0.92);
-  border: 1px solid #6b4423;
-  padding: 0.75rem;
-}
-
-.fov-dice-dock {
+  top: 50%;
+  left: 50%;
+  z-index: 30;
+  width: 85%;
+  max-width: 42rem;
+  height: 45%;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  min-width: 9rem;
+  overflow: hidden;
+  background: #f4ebd0;
+  border: 2px solid #d4c59a;
+  border-radius: 0.5rem;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.55);
+  padding: 1.25rem 1.5rem;
+  font-family: 'IM Fell English', Georgia, serif;
+  color: #1c1b17;
+  -webkit-mask-image: none;
+  mask-image: none;
+  backdrop-filter: none;
+  filter: none;
+}
+
+.fov-ledger-header {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid rgba(92, 58, 33, 0.35);
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #5c3a21;
+}
+
+.fov-ledger-live {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.58rem;
+  color: #7a5a38;
+}
+
+.fov-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.fov-scroll-line {
+  margin: 0 0 0.55rem;
+  color: #1c1b17;
+}
+
+.fov-scroll-line strong {
+  color: #7f1d1d;
+  font-family: Cinzel, Georgia, serif;
+  font-weight: 700;
+}
+
+.fov-scroll-line.is-roll strong {
+  color: #8b4510;
+}
+
+.fov-scroll-line.is-system {
+  color: #5c3a21;
+  font-style: italic;
+}
+
+/* ——— Layer 3: fixed wood control dock (root shell) ——— */
+.fov-control-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  width: 100%;
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  background: #1a120e;
+  border-top: 2px solid rgba(138, 109, 75, 0.5);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.9);
+}
+
+.fov-dock-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.fov-coop-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 5.5rem;
+  max-width: 8rem;
+  padding: 0.4rem 0.5rem;
+  background: #140e0a;
+  border: 1px solid rgba(138, 109, 75, 0.45);
+  color: #f0e2c4;
+}
+
+.fov-coop-chip--right {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.fov-coop-chip.is-empty {
+  opacity: 0.4;
+}
+
+.fov-coop-avatar {
+  width: 1.85rem;
+  height: 2.15rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.72rem;
+  background: #2a1810;
+  border: 1px solid #6b4423;
+  border-radius: 40% 40% 18% 18% / 28% 28% 12% 12%;
+}
+
+.fov-coop-name {
+  margin: 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.62rem;
+}
+
+.fov-coop-track {
+  margin: 0.1rem 0 0;
+  font-size: 0.55rem;
+  font-style: italic;
+  color: #b8965c;
+}
+
+.fov-dock-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.fov-dice-dock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
 }
 
 .fov-roll-btn {
   font-family: Cinzel, Georgia, serif;
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 0.85rem 1rem;
+  padding: 0.55rem 0.75rem;
   color: #1a100c;
   background: linear-gradient(135deg, #f59e0b, #b8965c);
   border: none;
   cursor: pointer;
 }
 
-.fov-roll-btn:active {
-  transform: translateY(1px);
-}
-
-.fov-scroll {
-  position: absolute;
-  right: 0.75rem;
-  top: 24%;
-  bottom: 26%;
-  width: min(280px, 32vw);
-  z-index: 5;
-  padding: 0.85rem;
-  overflow: auto;
-  background: rgba(40, 24, 14, 0.72);
+.fov-roll-btn.secondary {
+  background: transparent;
+  color: #b8965c;
   border: 1px solid rgba(184, 150, 92, 0.55);
-  box-shadow: 0 0 24px rgba(180, 83, 9, 0.18);
-  backdrop-filter: blur(8px);
-  font-size: 0.8rem;
-  line-height: 1.45;
 }
 
-.fov-scroll-line {
-  margin: 0 0 0.55rem;
-  color: #e4d0a2;
+.fov-compose {
+  display: flex;
+  gap: 0.45rem;
 }
 
-.fov-scroll-line strong {
-  color: #f59e0b;
+.fov-chat-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: 'IM Fell English', Georgia, serif;
+  font-size: 1rem;
+  color: #f0e2c4;
+  background: rgba(10, 6, 4, 0.55);
+  border: 1px solid rgba(107, 68, 35, 0.65);
+  padding: 0.55rem 0.65rem;
+  outline: none;
+}
+
+.fov-chat-send {
+  flex: 0 0 auto;
   font-family: Cinzel, Georgia, serif;
-  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.55rem 0.85rem;
+  color: #1a100c;
+  background: linear-gradient(135deg, #f59e0b, #b8965c);
+  border: none;
+  cursor: pointer;
+}
+
+.fov-throw-readout {
+  margin: 0;
+  text-align: center;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.58rem;
+  color: #b8965c;
 }
 
 #fov-dice-canvas {
   position: absolute;
   inset: 0;
-  z-index: 50;
+  z-index: 40;
   pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .fov-ledger-layer {
+    width: 92%;
+    height: 40%;
+    padding: 0.85rem 1rem;
+  }
+
+  .fov-control-dock {
+    height: 200px;
+  }
+
+  .fov-coop-chip .fov-coop-meta {
+    display: none;
+  }
+
+  .fov-coop-chip {
+    min-width: 2.75rem;
+    max-width: 3.25rem;
+  }
 }
