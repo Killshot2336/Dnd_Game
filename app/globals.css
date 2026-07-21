@@ -631,7 +631,7 @@ body {
 /* 2.5D table — base; fluid tilt/scale in responsive.css */
 .fp-table-stage {
   perspective: var(--table-perspective, 900px);
-  perspective-origin: 50% 78%;
+  perspective-origin: 50% 92%;
 }
 
 .fp-table-plane {
