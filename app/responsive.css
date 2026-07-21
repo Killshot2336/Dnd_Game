@@ -169,10 +169,11 @@ html.vv-tiny {
     --table-perspective: 760px;
   }
 
-  .chronicle-on-felt {
+  .chronicle-on-felt,
+  .chronicle-layer {
     width: min(52%, 26rem) !important;
-    height: min(62%, 18rem) !important;
-    top: 48% !important;
+    height: min(55%, 16rem) !important;
+    top: 42% !important;
   }
 
   .v3-sconce-far {
@@ -180,9 +181,10 @@ html.vv-tiny {
   }
 }
 
-html.vv-landscape.vv-narrow .chronicle-on-felt {
+html.vv-landscape.vv-narrow .chronicle-on-felt,
+html.vv-landscape.vv-narrow .chronicle-layer {
   width: min(52%, 26rem) !important;
-  height: min(62%, 18rem) !important;
+  height: min(55%, 16rem) !important;
 }
 
 /* Apply fluid table transform */
@@ -235,9 +237,10 @@ html.vv-keyboard .fp-table-stage {
   opacity: 0.7;
 }
 
-html.vv-keyboard .chronicle-on-felt {
-  height: min(36%, 14rem) !important;
-  top: 38% !important;
+html.vv-keyboard .chronicle-on-felt,
+html.vv-keyboard .chronicle-layer {
+  height: min(32%, 12rem) !important;
+  top: 36% !important;
 }
 
 html.vv-keyboard .action-dock {

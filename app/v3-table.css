@@ -135,9 +135,8 @@
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, transparent 22%),
-    linear-gradient(0deg, rgba(0, 0, 0, 0.55) 0%, transparent 28%);
+  /* Top vignette only on 3D map — no bottom fade onto UI layers */
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.4) 0%, transparent 20%);
 }
 
 .board-frame::after {
@@ -153,6 +152,20 @@
 .fp-table-stage {
   perspective: var(--table-perspective, 900px);
   perspective-origin: 50% 92%;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 5%,
+    #000 82%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    #000 5%,
+    #000 82%,
+    transparent 100%
+  );
 }
 
 .fp-table-plane {
