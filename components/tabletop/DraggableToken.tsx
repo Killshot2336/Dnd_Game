@@ -76,6 +76,9 @@ export default function DraggableToken({
 
     frame = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frame);
+    // Intentionally keying on pos.x / pos.y so parent re-renders with new object
+    // identity do not reset an in-flight 150ms peer lerp.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pos.x, pos.y, profileId, shouldLerp]);
 
   const updateFromPointer = useCallback(
