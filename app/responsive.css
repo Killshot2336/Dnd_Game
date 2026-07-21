@@ -94,6 +94,11 @@ body {
   min-height: 0;
 }
 
+.room-split > .action-hub {
+  position: absolute;
+  z-index: 45;
+}
+
 .room-split > .action-dock {
   position: absolute;
   z-index: 45;
@@ -238,6 +243,7 @@ html.vv-keyboard .chronicle-on-felt {
   top: 38% !important;
 }
 
+html.vv-keyboard .action-hub,
 html.vv-keyboard .action-dock {
   max-height: 46vh;
 }
