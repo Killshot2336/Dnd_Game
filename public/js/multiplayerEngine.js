@@ -14,23 +14,25 @@
   };
 
   const SEAT_ANCHORS = {
-    bottom: { x: 50, y: 78 },
-    left: { x: 16, y: 46 },
-    right: { x: 84, y: 46 },
-    far: { x: 50, y: 18 },
+    bottom: { x: 50, y: 92 },
+    left: { x: 12, y: 82 },
+    right: { x: 88, y: 82 },
+    far: { x: 50, y: 14 },
   };
 
   const DICE_LAUNCH = {
-    bottom: { ox: 0, oy: 36, vx: 0, vy: -1, spread: 0.35 },
+    /* Bottom dock: launch forward (up-screen) across the ledger toward the Arbiter. */
+    bottom: { ox: 0, oy: 8, vx: 0, vy: -1.35, spread: 0.28 },
     left: { ox: -42, oy: 0, vx: 1, vy: -0.15, spread: 0.4 },
     right: { ox: 42, oy: 0, vx: -1, vy: -0.15, spread: 0.4 },
     far: { ox: 0, oy: -28, vx: 0, vy: 0.55, spread: 0.3 },
   };
 
-  const DICE_REST = { x: 50, y: 22 };
+  /* Rest zone sits just in front of the Arbiter on the far table rail. */
+  const DICE_REST = { x: 50, y: 16 };
   const LERP_MS = 150;
   const TABLE_PERSPECTIVE = '900px';
-  const TABLE_ROTATE_X = '22deg';
+  const TABLE_ROTATE_X = '25deg';
 
   function clamp(n, min, max) {
     return Math.min(max, Math.max(min, n));
@@ -200,7 +202,7 @@
   function applyStagePerspective(stageEl) {
     if (!stageEl || !stageEl.style) return;
     stageEl.style.perspective = TABLE_PERSPECTIVE;
-    stageEl.style.perspectiveOrigin = '50% 78%';
+    stageEl.style.perspectiveOrigin = '50% 92%';
   }
 
   /** Token mesh lerper — glides toward network targets over 150ms using delta time. */
@@ -292,13 +294,40 @@
   }
 
   /**
+   * Spin / drift hints for DOM or canvas dice meshes launching from a seat
+   * toward the Arbiter rest zone on the far table rail.
+   */
+  function getLocalDiceThrowVectors(options) {
+    const opts = options || {};
+    let seat = opts.fromSeat || SEAT.BOTTOM;
+    if (seat === 'self') seat = SEAT.BOTTOM;
+    const launch = DICE_LAUNCH[seat] || DICE_LAUNCH.bottom;
+    const towardArbiter = !opts.toward || opts.toward === 'arbiter';
+    return {
+      seat: seat,
+      toward: towardArbiter ? 'arbiter' : String(opts.toward),
+      vx: launch.vx,
+      vy: towardArbiter && seat === SEAT.BOTTOM ? Math.min(launch.vy, -1.2) : launch.vy,
+      ox: launch.ox,
+      oy: launch.oy,
+      spread: launch.spread,
+      spinX: 380 + Math.random() * 220,
+      spinY: 520 + Math.random() * 280,
+      driftX: (Math.random() - 0.5) * 48,
+      rest: { x: DICE_REST.x, y: DICE_REST.y },
+    };
+  }
+
+  /**
    * Local dice launch vector from a seat slot. Network only carries the final face
    * integer (and seed); trajectory mesh motion is computed per device.
+   * Bottom-seat throws originate at the hands dock and settle in front of the Arbiter.
    */
   function createLocalDiceTrajectory(seat, finalValue, tableRect) {
     const launch = DICE_LAUNCH[seat] || DICE_LAUNCH.bottom;
     const width = tableRect && tableRect.width ? tableRect.width : 800;
     const height = tableRect && tableRect.height ? tableRect.height : 600;
+    const fromDock = !!(tableRect && tableRect.fromDock);
     const originX =
       seat === SEAT.BOTTOM
         ? width * 0.5
@@ -309,18 +338,20 @@
             : width * 0.5;
     const originY =
       seat === SEAT.BOTTOM
-        ? height * 0.92
+        ? height * (fromDock ? 0.94 : 0.9)
         : seat === SEAT.LEFT || seat === SEAT.RIGHT
-          ? height * 0.55
+          ? height * 0.72
           : height * 0.18;
     const restX = width * (DICE_REST.x / 100);
     const restY = height * (DICE_REST.y / 100);
     const face = clamp(Math.floor(Number(finalValue) || 1), 1, 20);
+    const primaryBoost = seat === SEAT.BOTTOM ? 1.25 : 1;
 
     const particles = [];
     for (let i = 0; i < 5; i++) {
       const jitter = (Math.random() - 0.5) * launch.spread;
-      const speed = 9 + Math.random() * 7;
+      const speed = (10 + Math.random() * 8) * primaryBoost;
+      const isPrimary = i === 0;
       particles.push({
         id: Math.random(),
         x: originX + launch.ox + (Math.random() - 0.5) * 16,
@@ -328,12 +359,12 @@
         vx: launch.vx * speed + jitter * 10,
         vy: launch.vy * speed + (Math.random() - 0.5) * 3,
         rotation: Math.random() * Math.PI * 2,
-        vRot: (Math.random() - 0.5) * 0.45,
-        size: 16 + Math.random() * 10,
+        vRot: (Math.random() - 0.5) * 0.55,
+        size: isPrimary ? 22 + Math.random() * 8 : 14 + Math.random() * 8,
         alpha: 1,
         value: face,
-        settleX: restX + (Math.random() - 0.5) * 26,
-        settleY: restY + (Math.random() - 0.5) * 18,
+        settleX: restX + (Math.random() - 0.5) * (isPrimary ? 10 : 26),
+        settleY: restY + (Math.random() - 0.5) * (isPrimary ? 8 : 18),
         age: 0,
         settled: false,
       });
@@ -519,6 +550,7 @@
     resolveLocalTokenPosition,
     seatAnchorPosition,
     createLocalDiceTrajectory,
+    getLocalDiceThrowVectors,
     stepDiceParticles,
     buildRollBroadcast,
     createTokenLerpController,

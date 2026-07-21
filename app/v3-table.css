@@ -156,7 +156,7 @@
 }
 
 .fp-table-plane {
-  transform: perspective(var(--table-perspective, 900px)) rotateX(var(--table-tilt, 22deg))
+  transform: perspective(var(--table-perspective, 900px)) rotateX(var(--table-tilt, 25deg))
     scale(var(--table-scale, 1.12));
   transform-origin: 50% 100%;
   transform-style: preserve-3d;
