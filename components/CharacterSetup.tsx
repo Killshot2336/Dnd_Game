@@ -231,7 +231,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
   if (stage === 'sheet') {
     return (
       <GameStage className="sheet-room v3-chamber" skipBoot ambient={false}>
-      <div className="fixed inset-0 z-50 overflow-y-auto custom-scrollbar">
+      <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain custom-scrollbar sheet-forge-scroll">
         <div className="v3-chamber-wall" aria-hidden />
         <div className="v3-sconce v3-sconce-left" aria-hidden />
         <div className="v3-sconce v3-sconce-right" aria-hidden />
@@ -244,7 +244,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
         <div className="absolute left-8 top-16 w-40 h-40 torch-glow" />
         <div className="absolute right-10 bottom-20 w-48 h-48 torch-glow" />
 
-        <div className="relative z-10 mx-auto max-w-5xl px-3 sm:px-5 py-4 sm:py-6 sheet-unfurl">
+        <div className="relative z-10 mx-auto max-w-5xl px-3 sm:px-5 py-4 sm:py-6 pb-10 sheet-unfurl">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3 text-[#b8965c]">
             <button
               type="button"
@@ -264,7 +264,7 @@ export default function CharacterSetup({ onFinish }: CharacterSetupProps) {
             </p>
           )}
 
-          <div className="dnd-sheet v3-sacred-sheet p-3 sm:p-5 space-y-3">
+          <div className="dnd-sheet v3-sacred-sheet p-3 sm:p-5 pb-6 space-y-3">
             {/* Header identity */}
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_7.5rem]">
               <div className="dnd-box px-3 py-2">

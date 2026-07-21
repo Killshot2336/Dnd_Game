@@ -315,14 +315,36 @@ aside.sheet-leather {
   }
 }
 
-/* Gate / forge centering uses live height */
+/* Gate / forge centering uses live height.
+   Only the arrive/pick/ai gate card is viewport-capped — the full
+   candlelight sheet must grow with content or its parchment clips mid-card. */
 .gate-stage-inner {
   max-height: calc(var(--app-height) - 2rem);
   overflow-y: auto;
 }
 
-.dnd-sheet.v3-sacred-sheet {
+.dnd-sheet.v3-sacred-sheet.gate-stage-inner {
   max-height: calc(var(--app-height) - 2rem);
+  overflow-y: auto;
+}
+
+/* Character forge full sheet: allow scroll to Seal button */
+.aaa-root.sheet-room {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: var(--app-height) !important;
+}
+
+.aaa-root.sheet-room > .aaa-stage {
+  height: auto !important;
+  max-height: none !important;
+  min-height: var(--app-height) !important;
+}
+
+.sheet-forge-scroll {
+  padding-bottom: calc(2.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* Mini tokens scale slightly on narrow screens */
