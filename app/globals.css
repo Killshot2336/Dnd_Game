@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&display=swap');
 @import './v3-table.css';
 @import './responsive.css';
+@import './celestial-void.css';
 
 @tailwind base;
 @tailwind components;
